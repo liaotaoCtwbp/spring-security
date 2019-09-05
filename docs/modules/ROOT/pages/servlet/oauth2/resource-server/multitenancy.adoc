@@ -15,10 +15,12 @@ If this decision must be made at request-time, then you can use an `Authenticati
 @Bean
 AuthenticationManagerResolver<HttpServletRequest> tokenAuthenticationManagerResolver
         (JwtDecoder jwtDecoder, OpaqueTokenIntrospector opaqueTokenIntrospector) {
-    AuthenticationManager jwt = new ProviderManager(new JwtAuthenticationProvider(jwtDecoder));
-    AuthenticationManager opaqueToken = new ProviderManager(
-            new OpaqueTokenAuthenticationProvider(opaqueTokenIntrospector));
-    return (request) -> useJwt(request) ? jwt : opaqueToken;
+    AuthenticationManager jwt = new JwtAuthenticationProvider(jwtDecoder)::authenticate;
+    AuthenticationManager opaque = new OpaqueTokenAuthenticationProvider(opaqueTokenIntrospector)::authenticate;
+    return RequestMatcherDelegatingAuthenticationManagerResolver.builder()
+            .add(new RequestMatcherEntry<>(new AntPathRequestMatcher("/opaque/**"), opaque))
+            .add(new RequestMatcherEntry<>(AnyRequestMatcher.INSTANCE, jwt))
+            .build();
 }
 ----
 
@@ -31,19 +33,13 @@ fun tokenAuthenticationManagerResolver
         AuthenticationManagerResolver<HttpServletRequest> {
     val jwt = ProviderManager(JwtAuthenticationProvider(jwtDecoder))
     val opaqueToken = ProviderManager(OpaqueTokenAuthenticationProvider(opaqueTokenIntrospector));
-
-    return AuthenticationManagerResolver { request ->
-        if (useJwt(request)) {
-            jwt
-        } else {
-            opaqueToken
-        }
-    }
+    return RequestMatcherDelegatingAuthenticationManagerResolver.builder()
+            .add(RequestMatcherEntry(AntPathRequestMatcher("/opaque/**"), opaque))
+            .add(RequestMatcherEntry(AnyRequestMatcher.INSTANCE, jwt))
+            .build()
 }
 ----
 ====
-
-NOTE: The implementation of `useJwt(HttpServletRequest)` will likely depend on custom request material like the path.
 
 And then specify this `AuthenticationManagerResolver` in the DSL:
 

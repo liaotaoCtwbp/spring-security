@@ -1,5 +1,76 @@
 = OAuth 2.0 Resource Server Multitenancy
 
+[[webflux-oauth2reourceserver-opaqueandjwt]]
+== Supporting both JWT and Opaque Token
+
+In some cases, you may have a need to access both kinds of tokens.
+For example, you may support more than one tenant where one tenant issues JWTs and the other issues opaque tokens.
+
+If this decision must be made at request-time, then you can use an `AuthenticationManagerResolver` to achieve it, like so:
+
+====
+.Java
+[source,java,role="primary"]
+----
+@Bean
+ReactiveAuthenticationManagerResolver<ServerWebExchange> tokenAuthenticationManagerResolver
+        (ReactiveJwtDecoder jwtDecoder, ReactiveOpaqueTokenIntrospector opaqueTokenIntrospector) {
+    ReactiveAuthenticationManager jwt = new JwtReactiveAuthenticationManager(jwtDecoder);
+    ReactiveAuthenticationManager opaque = new OpaqueTokenReactiveAuthenticationManager(opaqueTokenIntrospector);
+    return ServerWebExchangeDelegatingReactiveAuthenticationManagerResolver.builder()
+            .add(new ServerWebExchangeMatcherEntry<>(ServerWebExchangeMatchers.pathPatterns("/opaque/**"), opaque))
+            .add(new ServerWebExchangeMatcherEntry<>(ServerWebExchangeMatchers.anyExchange(), jwt))
+            .build();
+}
+----
+
+.Kotlin
+[source,kotlin,role="secondary"]
+----
+@Bean
+fun tokenAuthenticationManagerResolver
+        (jwtDecoder: JwtDecoder, opaqueTokenIntrospector: OpaqueTokenIntrospector):
+        AuthenticationManagerResolver<HttpServletRequest> {
+    val jwt = JwtReactiveAuthenticationManager(jwtDecoder)
+    val opaque = OpaqueTokenReactiveAuthenticationManager(opaqueTokenIntrospector)
+    return ServerWebExchangeDelegatingReactiveAuthenticationManagerResolver.builder()
+            .add(ServerWebExchangeMatcherEntry(ServerWebExchangeMatchers.pathPatterns("/opaque/**"), opaque))
+            .add(ServerWebExchangeMatcherEntry(ServerWebExchangeMatchers.anyExchange(), jwt))
+            .build()
+}
+----
+====
+
+And then specify this `ReactiveAuthenticationManagerResolver` in the DSL:
+
+.Authentication Manager Resolver
+====
+.Java
+[source,java,role="primary"]
+----
+http
+    .authorizeExchange((authorize) -> authorize
+        .anyExchange().authenticated()
+    )
+    .oauth2ResourceServer((oauth2) -> oauth2
+        .authenticationManagerResolver(this.tokenAuthenticationManagerResolver)
+    );
+----
+
+.Kotlin
+[source,kotlin,role="secondary"]
+----
+http {
+    authorizeExchange {
+        authorize(anyExchange, authenticated)
+    }
+    oauth2ResourceServer {
+        authenticationManagerResolver = tokenAuthenticationManagerResolver()
+    }
+}
+----
+====
+
 [[webflux-oauth2resourceserver-multitenancy]]
 == Multi-tenancy
 
