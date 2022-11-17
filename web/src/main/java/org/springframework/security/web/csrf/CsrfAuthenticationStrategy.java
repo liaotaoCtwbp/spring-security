@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package org.springframework.security.web.csrf;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -39,29 +38,36 @@ public final class CsrfAuthenticationStrategy implements SessionAuthenticationSt
 
 	private final Log logger = LogFactory.getLog(getClass());
 
-	private final CsrfTokenRepository csrfTokenRepository;
+	private final CsrfTokenRepository tokenRepository;
+
+	private CsrfTokenRequestHandler requestHandler = new CsrfTokenRequestAttributeHandler();
 
 	/**
 	 * Creates a new instance
-	 * @param csrfTokenRepository the {@link CsrfTokenRepository} to use
+	 * @param tokenRepository the {@link CsrfTokenRepository} to use
 	 */
-	public CsrfAuthenticationStrategy(CsrfTokenRepository csrfTokenRepository) {
-		Assert.notNull(csrfTokenRepository, "csrfTokenRepository cannot be null");
-		this.csrfTokenRepository = csrfTokenRepository;
+	public CsrfAuthenticationStrategy(CsrfTokenRepository tokenRepository) {
+		Assert.notNull(tokenRepository, "tokenRepository cannot be null");
+		this.tokenRepository = tokenRepository;
+	}
+
+	/**
+	 * Specify a {@link CsrfTokenRequestHandler} to use for making the {@code CsrfToken}
+	 * available as a request attribute.
+	 * @param requestHandler the {@link CsrfTokenRequestHandler} to use
+	 */
+	public void setRequestHandler(CsrfTokenRequestHandler requestHandler) {
+		Assert.notNull(requestHandler, "requestHandler cannot be null");
+		this.requestHandler = requestHandler;
 	}
 
 	@Override
 	public void onAuthentication(Authentication authentication, HttpServletRequest request,
 			HttpServletResponse response) throws SessionAuthenticationException {
-		boolean containsToken = this.csrfTokenRepository.loadToken(request) != null;
-		if (containsToken) {
-			this.csrfTokenRepository.saveToken(null, request, response);
-			CsrfToken newToken = this.csrfTokenRepository.generateToken(request);
-			this.csrfTokenRepository.saveToken(newToken, request, response);
-			request.setAttribute(CsrfToken.class.getName(), newToken);
-			request.setAttribute(newToken.getParameterName(), newToken);
-			this.logger.debug("Replaced CSRF Token");
-		}
+		this.tokenRepository.saveToken(null, request, response);
+		DeferredCsrfToken deferredCsrfToken = this.tokenRepository.loadDeferredToken(request, response);
+		this.requestHandler.handle(request, response, deferredCsrfToken::get);
+		this.logger.debug("Replaced CSRF Token");
 	}
 
 }

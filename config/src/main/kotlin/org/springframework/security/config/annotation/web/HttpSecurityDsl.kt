@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@ package org.springframework.security.config.annotation.web
 
 import org.springframework.context.ApplicationContext
 import org.springframework.security.authentication.AuthenticationManager
+import org.springframework.security.config.annotation.SecurityConfigurerAdapter
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrationRepository
+import org.springframework.security.web.DefaultSecurityFilterChain
 import org.springframework.security.web.util.matcher.RequestMatcher
 import org.springframework.util.ClassUtils
 import jakarta.servlet.Filter
@@ -32,24 +34,28 @@ import jakarta.servlet.http.HttpServletRequest
  * Example:
  *
  * ```
+ * @Configuration
  * @EnableWebSecurity
- * class SecurityConfig : WebSecurityConfigurerAdapter() {
+ * class SecurityConfig {
  *
- *  override fun configure(http: HttpSecurity) {
- *      http {
- *          authorizeRequests {
- *              request("/public", permitAll)
- *              request(anyRequest, authenticated)
- *          }
- *          formLogin {
- *              loginPage = "/log-in"
- *          }
- *      }
- *  }
+ *     @Bean
+ *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+ *         http {
+ *             authorizeRequests {
+ *                 authorize("/public", permitAll)
+ *                 authorize(anyRequest, authenticated)
+ *             }
+ *             formLogin {
+ *                 loginPage = "/log-in"
+ *             }
+ *         }
+ *         return http.build()
+ *     }
  * }
  * ```
  *
  * @author Eleftheria Stein
+ * @author Norbert Nowak
  * @since 5.3
  * @param httpConfiguration the configurations to apply to [HttpSecurity]
  */
@@ -73,6 +79,35 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
     var authenticationManager: AuthenticationManager? = null
 
     /**
+     * Applies a [SecurityConfigurerAdapter] to this [HttpSecurity]
+     *
+     * Example:
+     *
+     * ```
+     * @Configuration
+     * @EnableWebSecurity
+     * class SecurityConfig {
+     *
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             apply(CustomSecurityConfigurer<HttpSecurity>()) {
+     *                 customProperty = "..."
+     *             }
+     *         }
+     *         return http.build()
+     *     }
+     * }
+     * ```
+     *
+     * @param configurer
+     * the [SecurityConfigurerAdapter] for further customizations
+     */
+    fun <C : SecurityConfigurerAdapter<DefaultSecurityFilterChain, HttpSecurity>> apply(configurer: C, configuration: C.() -> Unit = { }): C {
+        return this.http.apply(configurer).apply(configuration)
+    }
+
+    /**
      * Allows configuring the [HttpSecurity] to only be invoked when matching the
      * provided pattern.
      * If Spring MVC is on the classpath, it will use an MVC matcher.
@@ -81,17 +116,20 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          securityMatcher("/private/&ast;&ast;")
-     *          formLogin {
-     *              loginPage = "/log-in"
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             securityMatcher("/private/&ast;&ast;")
+     *             formLogin {
+     *                 loginPage = "/log-in"
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -99,15 +137,8 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * configuration should be invoked.
      */
     fun securityMatcher(vararg pattern: String) {
-        val mvcPresent = ClassUtils.isPresent(
-                HANDLER_MAPPING_INTROSPECTOR,
-                AuthorizeRequestsDsl::class.java.classLoader)
-        this.http.requestMatchers {
-            if (mvcPresent) {
-                it.mvcMatchers(*pattern)
-            } else {
-                it.antMatchers(*pattern)
-            }
+        this.http.securityMatchers {
+            it.requestMatchers(*pattern)
         }
     }
 
@@ -118,17 +149,20 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          securityMatcher(AntPathRequestMatcher("/private/&ast;&ast;"))
-     *          formLogin {
-     *              loginPage = "/log-in"
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             securityMatcher(AntPathRequestMatcher("/private/&ast;&ast;"))
+     *             formLogin {
+     *                 loginPage = "/log-in"
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -136,7 +170,7 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * this configuration should be invoked.
      */
     fun securityMatcher(vararg requestMatcher: RequestMatcher) {
-        this.http.requestMatchers {
+        this.http.securityMatchers {
             it.requestMatchers(*requestMatcher)
         }
     }
@@ -147,16 +181,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          formLogin {
-     *              loginPage = "/log-in"
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             formLogin {
+     *                 loginPage = "/log-in"
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -175,17 +212,20 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          authorizeRequests {
-     *              request("/public", permitAll)
-     *              request(anyRequest, authenticated)
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             authorizeRequests {
+     *                 authorize("/public", permitAll)
+     *                 authorize(anyRequest, authenticated)
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -199,21 +239,57 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
     }
 
     /**
+     * Allows restricting access based upon the [HttpServletRequest]
+     *
+     * Example:
+     *
+     * ```
+     * @Configuration
+     * @EnableWebSecurity
+     * class SecurityConfig {
+     *
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             authorizeHttpRequests {
+     *                 authorize("/public", permitAll)
+     *                 authorize(anyRequest, authenticated)
+     *             }
+     *         }
+     *         return http.build()
+     *     }
+     * }
+     * ```
+     *
+     * @param authorizeHttpRequestsConfiguration custom configuration that specifies
+     * access for requests
+     * @see [AuthorizeHttpRequestsDsl]
+     * @since 5.7
+     */
+    fun authorizeHttpRequests(authorizeHttpRequestsConfiguration: AuthorizeHttpRequestsDsl.() -> Unit) {
+        val authorizeHttpRequestsCustomizer = AuthorizeHttpRequestsDsl().apply(authorizeHttpRequestsConfiguration).get()
+        this.http.authorizeHttpRequests(authorizeHttpRequestsCustomizer)
+    }
+
+    /**
      * Enables HTTP basic authentication.
      *
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          httpBasic {
-     *              realmName = "Custom Realm"
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             httpBasic {
+     *                 realmName = "Custom Realm"
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -232,16 +308,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          passwordManagement {
-     *              changePasswordPage = "/custom-change-password-page"
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             passwordManagement {
+     *                 changePasswordPage = "/custom-change-password-page"
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -261,18 +340,21 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          headers {
-     *              referrerPolicy {
-     *                  policy = ReferrerPolicy.SAME_ORIGIN
-     *              }
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             headers {
+     *                 referrerPolicy {
+     *                     policy = ReferrerPolicy.SAME_ORIGIN
+     *                 }
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -291,16 +373,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          cors {
-     *              disable()
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             cors {
+     *                 disable()
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -319,19 +404,22 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          sessionManagement {
-     *              invalidSessionUrl = "/invalid-session"
-     *              sessionConcurrency {
-     *                  maximumSessions = 1
-     *              }
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             sessionManagement {
+     *                 invalidSessionUrl = "/invalid-session"
+     *                 sessionConcurrency {
+     *                     maximumSessions = 1
+     *                 }
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -350,16 +438,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          portMapper {
-     *              map(80, 443)
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             portMapper {
+     *                 map(80, 443)
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -378,17 +469,20 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          requiresChannel {
-     *              secure("/public", requiresInsecure)
-     *              secure(anyRequest, requiresSecure)
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             requiresChannel {
+     *                 secure("/public", requiresInsecure)
+     *                 secure(anyRequest, requiresSecure)
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -407,14 +501,17 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          x509 { }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             x509 { }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -434,14 +531,17 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          requestCache { }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             requestCache { }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -460,16 +560,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          exceptionHandling {
-     *              accessDeniedPage = "/access-denied"
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             exceptionHandling {
+     *                 accessDeniedPage = "/access-denied"
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -488,14 +591,17 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          csrf { }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             csrf { }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -513,16 +619,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          logout {
-     *              logoutUrl = "/log-out"
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             logout {
+     *                 logoutUrl = "/log-out"
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -543,16 +652,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          saml2Login {
-     *              relyingPartyRegistration = getSaml2RelyingPartyRegistration()
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             saml2Login {
+     *                 relyingPartyRegistration = getSaml2RelyingPartyRegistration()
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -571,16 +683,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          anonymous {
-     *              authorities = listOf(SimpleGrantedAuthority("ROLE_ANON"))
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             anonymous {
+     *                 authorities = listOf(SimpleGrantedAuthority("ROLE_ANON"))
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -601,16 +716,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          oauth2Login {
-     *              clientRegistrationRepository = getClientRegistrationRepository()
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             oauth2Login {
+     *                 clientRegistrationRepository = getClientRegistrationRepository()
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -629,14 +747,17 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          oauth2Client { }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             oauth2Client { }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -655,16 +776,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          oauth2ResourceServer {
-     *              jwt { }
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             oauth2ResourceServer {
+     *                 jwt { }
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -683,16 +807,19 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          rememberMe {
-     *              tokenValiditySeconds = 604800
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             rememberMe {
+     *                 tokenValiditySeconds = 604800
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -710,14 +837,17 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          addFilterAt(CustomFilter(), UsernamePasswordAuthenticationFilter::class.java)
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             addFilterAt(CustomFilter(), UsernamePasswordAuthenticationFilter::class.java)
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -737,13 +867,16 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *     override fun configure(http: HttpSecurity) {
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
      *         http {
      *             addFilterAt<UsernamePasswordAuthenticationFilter>(CustomFilter())
      *         }
+     *         return http.build()
      *     }
      * }
      * ```
@@ -763,14 +896,17 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          addFilterAfter(CustomFilter(), UsernamePasswordAuthenticationFilter::class.java)
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             addFilterAfter(CustomFilter(), UsernamePasswordAuthenticationFilter::class.java)
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -790,13 +926,16 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *     override fun configure(http: HttpSecurity) {
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
      *         http {
      *             addFilterAfter<UsernamePasswordAuthenticationFilter>(CustomFilter())
      *         }
+     *         return http.build()
      *     }
      * }
      * ```
@@ -816,14 +955,17 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      http {
-     *          addFilterBefore(CustomFilter(), UsernamePasswordAuthenticationFilter::class.java)
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             addFilterBefore(CustomFilter(), UsernamePasswordAuthenticationFilter::class.java)
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -843,14 +985,17 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *    override fun configure(http: HttpSecurity) {
-     *        http {
-     *            addFilterBefore<UsernamePasswordAuthenticationFilter>(CustomFilter())
-     *        }
-     *    }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             addFilterBefore<UsernamePasswordAuthenticationFilter>(CustomFilter())
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -869,5 +1014,36 @@ class HttpSecurityDsl(private val http: HttpSecurity, private val init: HttpSecu
     internal fun build() {
         init()
         authenticationManager?.also { this.http.authenticationManager(authenticationManager) }
+    }
+
+    /**
+     * Enables security context configuration.
+     *
+     * Example:
+     *
+     * ```
+     * @Configuration
+     * @EnableWebSecurity
+     * class SecurityConfig {
+     *
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *        http {
+     *           securityContext {
+     *               securityContextRepository = SECURITY_CONTEXT_REPOSITORY
+     *           }
+     *        }
+     *        return http.build()
+     *     }
+     * }
+     * ```
+     * @author Norbert Nowak
+     * @since 5.7
+     * @param securityContextConfiguration configuration to be applied to Security Context
+     * @see [SecurityContextDsl]
+     */
+    fun securityContext(securityContextConfiguration: SecurityContextDsl.() -> Unit) {
+        val securityContextCustomizer = SecurityContextDsl().apply(securityContextConfiguration).get()
+        this.http.securityContext(securityContextCustomizer)
     }
 }

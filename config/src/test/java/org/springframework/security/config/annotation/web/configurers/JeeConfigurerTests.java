@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,16 +23,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.AuthenticationUserDetailsService;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.preauth.j2ee.J2eeBasedPreAuthenticatedWebAuthenticationDetailsSource;
 import org.springframework.security.web.authentication.preauth.j2ee.J2eePreAuthenticatedProcessingFilter;
 import org.springframework.test.web.servlet.MockMvc;
@@ -151,16 +152,18 @@ public class JeeConfigurerTests {
 		this.mvc.perform(authRequest).andExpect(authenticated().withRoles("USER"));
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ObjectPostProcessorConfig extends WebSecurityConfigurerAdapter {
+	static class ObjectPostProcessorConfig {
 
 		static ObjectPostProcessor<Object> objectPostProcessor;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.jee();
+			return http.build();
 			// @formatter:on
 		}
 
@@ -180,27 +183,30 @@ public class JeeConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class InvokeTwiceDoesNotOverride extends WebSecurityConfigurerAdapter {
+	static class InvokeTwiceDoesNotOverride {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.jee()
 					.mappableRoles("USER")
 					.and()
 				.jee();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	public static class JeeMappableRolesConfig extends WebSecurityConfigurerAdapter {
+	public static class JeeMappableRolesConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -211,16 +217,18 @@ public class JeeConfigurerTests {
 					jee
 						.mappableRoles("USER")
 				);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	public static class JeeMappableAuthoritiesConfig extends WebSecurityConfigurerAdapter {
+	public static class JeeMappableAuthoritiesConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -231,19 +239,21 @@ public class JeeConfigurerTests {
 					jee
 						.mappableAuthorities("ROLE_USER")
 				);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	public static class JeeCustomAuthenticatedUserDetailsServiceConfig extends WebSecurityConfigurerAdapter {
+	public static class JeeCustomAuthenticatedUserDetailsServiceConfig {
 
 		static AuthenticationUserDetailsService authenticationUserDetailsService = mock(
 				AuthenticationUserDetailsService.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -254,6 +264,7 @@ public class JeeConfigurerTests {
 					jee
 						.authenticatedUserDetailsService(authenticationUserDetailsService)
 				);
+			return http.build();
 			// @formatter:on
 		}
 

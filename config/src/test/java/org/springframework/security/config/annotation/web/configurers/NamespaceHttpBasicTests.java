@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package org.springframework.security.config.annotation.web.configurers;
 
 import jakarta.servlet.http.HttpServletRequest;
-
 import org.apache.http.HttpHeaders;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,13 +27,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -176,27 +175,30 @@ public class NamespaceHttpBasicTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class HttpBasicConfig extends WebSecurityConfigurerAdapter {
+	static class HttpBasicConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
 					.anyRequest().hasRole("USER")
 					.and()
 				.httpBasic();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class HttpBasicLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class HttpBasicLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -204,32 +206,36 @@ public class NamespaceHttpBasicTests {
 						.anyRequest().hasRole("USER")
 				)
 				.httpBasic(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomHttpBasicConfig extends WebSecurityConfigurerAdapter {
+	static class CustomHttpBasicConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
 					.anyRequest().hasRole("USER")
 					.and()
 				.httpBasic().realmName("Custom Realm");
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomHttpBasicLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class CustomHttpBasicLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -237,23 +243,26 @@ public class NamespaceHttpBasicTests {
 						.anyRequest().hasRole("USER")
 				)
 				.httpBasic((httpBasicConfig) -> httpBasicConfig.realmName("Custom Realm"));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AuthenticationDetailsSourceHttpBasicConfig extends WebSecurityConfigurerAdapter {
+	static class AuthenticationDetailsSourceHttpBasicConfig {
 
 		AuthenticationDetailsSource<HttpServletRequest, ?> authenticationDetailsSource = mock(
 				AuthenticationDetailsSource.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.httpBasic()
 					.authenticationDetailsSource(this.authenticationDetailsSource);
+			return http.build();
 			// @formatter:on
 		}
 
@@ -264,18 +273,20 @@ public class NamespaceHttpBasicTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AuthenticationDetailsSourceHttpBasicLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class AuthenticationDetailsSourceHttpBasicLambdaConfig {
 
 		AuthenticationDetailsSource<HttpServletRequest, ?> authenticationDetailsSource = mock(
 				AuthenticationDetailsSource.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.httpBasic((httpBasicConfig) ->
 						httpBasicConfig.authenticationDetailsSource(this.authenticationDetailsSource));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -286,13 +297,14 @@ public class NamespaceHttpBasicTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class EntryPointRefHttpBasicConfig extends WebSecurityConfigurerAdapter {
+	static class EntryPointRefHttpBasicConfig {
 
 		AuthenticationEntryPoint authenticationEntryPoint = (request, response, ex) -> response.setStatus(999);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -300,18 +312,20 @@ public class NamespaceHttpBasicTests {
 					.and()
 				.httpBasic()
 					.authenticationEntryPoint(this.authenticationEntryPoint);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class EntryPointRefHttpBasicLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class EntryPointRefHttpBasicLambdaConfig {
 
 		AuthenticationEntryPoint authenticationEntryPoint = (request, response, ex) -> response.setStatus(999);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -320,6 +334,7 @@ public class NamespaceHttpBasicTests {
 				)
 				.httpBasic((httpBasicConfig) ->
 						httpBasicConfig.authenticationEntryPoint(this.authenticationEntryPoint));
+			return http.build();
 			// @formatter:on
 		}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 import org.springframework.context.annotation.AdviceMode;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
 import org.springframework.security.access.annotation.Secured;
@@ -43,13 +42,14 @@ import org.springframework.security.config.annotation.authentication.configurati
  *
  * @author Rob Winch
  * @since 3.2
+ * @deprecated Use {@link EnableMethodSecurity} instead
  */
+@Deprecated
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 @Documented
 @Import({ GlobalMethodSecuritySelector.class })
 @EnableGlobalAuthentication
-@Configuration
 public @interface EnableGlobalMethodSecurity {
 
 	/**

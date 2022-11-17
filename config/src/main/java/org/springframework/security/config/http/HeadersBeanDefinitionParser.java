@@ -69,10 +69,6 @@ public class HeadersBeanDefinitionParser implements BeanDefinitionParser {
 
 	private static final String ATT_DISABLED = "disabled";
 
-	private static final String ATT_ENABLED = "enabled";
-
-	private static final String ATT_BLOCK = "block";
-
 	private static final String ATT_POLICY = "policy";
 
 	private static final String ATT_STRATEGY = "strategy";
@@ -100,6 +96,8 @@ public class HeadersBeanDefinitionParser implements BeanDefinitionParser {
 	private static final String ATT_ALGORITHM = "algorithm";
 
 	private static final String ATT_POLICY_DIRECTIVES = "policy-directives";
+
+	private static final String ATT_HEADER_VALUE = "header-value";
 
 	private static final String CACHE_CONTROL_ELEMENT = "cache-control";
 
@@ -581,19 +579,13 @@ public class HeadersBeanDefinitionParser implements BeanDefinitionParser {
 		BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(XXssProtectionHeaderWriter.class);
 		if (xssElt != null) {
 			boolean disabled = "true".equals(getAttribute(xssElt, ATT_DISABLED, "false"));
-			String enabled = xssElt.getAttribute(ATT_ENABLED);
-			if (StringUtils.hasText(enabled)) {
+			XXssProtectionHeaderWriter.HeaderValue headerValue = XXssProtectionHeaderWriter.HeaderValue
+					.from(xssElt.getAttribute(ATT_HEADER_VALUE));
+			if (headerValue != null) {
 				if (disabled) {
-					attrNotAllowed(parserContext, ATT_ENABLED, ATT_DISABLED, xssElt);
+					attrNotAllowed(parserContext, ATT_HEADER_VALUE, ATT_DISABLED, xssElt);
 				}
-				builder.addPropertyValue("enabled", enabled);
-			}
-			String block = xssElt.getAttribute(ATT_BLOCK);
-			if (StringUtils.hasText(block)) {
-				if (disabled) {
-					attrNotAllowed(parserContext, ATT_BLOCK, ATT_DISABLED, xssElt);
-				}
-				builder.addPropertyValue("block", block);
+				builder.addPropertyValue("headerValue", headerValue);
 			}
 			if (disabled) {
 				return;

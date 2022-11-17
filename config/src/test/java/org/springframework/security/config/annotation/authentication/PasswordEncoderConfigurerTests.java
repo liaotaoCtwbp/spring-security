@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
@@ -55,22 +56,24 @@ public class PasswordEncoderConfigurerTests {
 		this.mockMvc.perform(formLogin()).andExpect(authenticated());
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class PasswordEncoderConfig extends WebSecurityConfigurerAdapter {
+	static class PasswordEncoderConfig {
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+		@Autowired
+		void configure(AuthenticationManagerBuilder auth) throws Exception {
 			BCryptPasswordEncoder encoder = passwordEncoder();
 			// @formatter:off
 			auth
-				.inMemoryAuthentication()
+					.inMemoryAuthentication()
 					.withUser("user").password(encoder.encode("password")).roles("USER").and()
 					.passwordEncoder(encoder);
 			// @formatter:on
 		}
 
-		@Override
-		protected void configure(HttpSecurity http) {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			return http.build();
 		}
 
 		@Bean
@@ -80,11 +83,12 @@ public class PasswordEncoderConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class PasswordEncoderNoAuthManagerLoadsConfig extends WebSecurityConfigurerAdapter {
+	static class PasswordEncoderNoAuthManagerLoadsConfig {
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+		@Autowired
+		void configure(AuthenticationManagerBuilder auth) throws Exception {
 			BCryptPasswordEncoder encoder = passwordEncoder();
 			// @formatter:off
 			auth

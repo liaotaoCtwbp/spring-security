@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.header.HeaderWriter;
 import org.springframework.security.web.header.HeaderWriterFilter;
 import org.springframework.security.web.header.writers.CacheControlHeadersWriter;
@@ -50,7 +50,7 @@ import org.springframework.util.Assert;
 /**
  * <p>
  * Adds the Security HTTP headers to the response. Security HTTP headers is activated by
- * default when using {@link WebSecurityConfigurerAdapter}'s default constructor.
+ * default when using {@link EnableWebSecurity}'s default constructor.
  * </p>
  *
  * <p>
@@ -64,7 +64,7 @@ import org.springframework.util.Assert;
  * X-Content-Type-Options: nosniff
  * Strict-Transport-Security: max-age=31536000 ; includeSubDomains
  * X-Frame-Options: DENY
- * X-XSS-Protection: 1; mode=block
+ * X-XSS-Protection: 0
  * </pre>
  *
  * @author Rob Winch
@@ -73,6 +73,7 @@ import org.springframework.util.Assert;
  * @author Eddú Meléndez
  * @author Vedran Pavic
  * @author Ankur Pathak
+ * @author Daniel Garnier-Moiroux
  * @since 3.2
  */
 public class HeadersConfigurer<H extends HttpSecurityBuilder<H>>
@@ -266,7 +267,11 @@ public class HeadersConfigurer<H extends HttpSecurityBuilder<H>>
 	 * @return the {@link HpkpConfig} for additional customizations
 	 *
 	 * @since 4.1
+	 * @deprecated see <a href=
+	 * "https://owasp.org/www-community/controls/Certificate_and_Public_Key_Pinning">Certificate
+	 * and Public Key Pinning</a> for more context
 	 */
+	@Deprecated
 	public HpkpConfig httpPublicKeyPinning() {
 		return this.hpkp.enable();
 	}
@@ -277,7 +282,11 @@ public class HeadersConfigurer<H extends HttpSecurityBuilder<H>>
 	 * @param hpkpCustomizer the {@link Customizer} to provide more options for the
 	 * {@link HpkpConfig}
 	 * @return the {@link HeadersConfigurer} for additional customizations
+	 * @deprecated see <a href=
+	 * "https://owasp.org/www-community/controls/Certificate_and_Public_Key_Pinning">Certificate
+	 * and Public Key Pinning</a> for more context
 	 */
+	@Deprecated
 	public HeadersConfigurer<H> httpPublicKeyPinning(Customizer<HpkpConfig> hpkpCustomizer) {
 		hpkpCustomizer.customize(this.hpkp.enable());
 		return HeadersConfigurer.this;
@@ -726,40 +735,36 @@ public class HeadersConfigurer<H extends HttpSecurityBuilder<H>>
 		}
 
 		/**
-		 * If false, will not specify the mode as blocked. In this instance, any content
-		 * will be attempted to be fixed. If true, the content will be replaced with "#".
-		 * @param enabled the new value
-		 */
-		public XXssConfig block(boolean enabled) {
-			this.writer.setBlock(enabled);
-			return this;
-		}
-
-		/**
-		 * If true, the header value will contain a value of 1. For example:
+		 * Sets the value of the X-XSS-PROTECTION header. OWASP recommends using
+		 * {@link XXssProtectionHeaderWriter.HeaderValue#DISABLED}.
+		 *
+		 * If {@link XXssProtectionHeaderWriter.HeaderValue#DISABLED}, will specify that
+		 * X-XSS-Protection is disabled. For example:
+		 *
+		 * <pre>
+		 * X-XSS-Protection: 0
+		 * </pre>
+		 *
+		 * If {@link XXssProtectionHeaderWriter.HeaderValue#ENABLED}, will contain a value
+		 * of 1, but will not specify the mode as blocked. In this instance, any content
+		 * will be attempted to be fixed. For example:
 		 *
 		 * <pre>
 		 * X-XSS-Protection: 1
 		 * </pre>
 		 *
-		 * or if {@link XXssProtectionHeaderWriter#setBlock(boolean)} of the given
-		 * {@link XXssProtectionHeaderWriter} is true
-		 *
-		 *
-		 * <pre>
-		 * X-XSS-Protection: 1; mode=block
-		 * </pre>
-		 *
-		 * If false, will explicitly disable specify that X-XSS-Protection is disabled.
-		 * For example:
+		 * If {@link XXssProtectionHeaderWriter.HeaderValue#ENABLED_MODE_BLOCK}, will
+		 * contain a value of 1 and will specify mode as blocked. The content will be
+		 * replaced with "#". For example:
 		 *
 		 * <pre>
-		 * X-XSS-Protection: 0
+		 * X-XSS-Protection: 1 ; mode=block
 		 * </pre>
-		 * @param enabled the new value
+		 * @param headerValue the new header value
+		 * @since 5.8
 		 */
-		public XXssConfig xssProtectionEnabled(boolean enabled) {
-			this.writer.setEnabled(enabled);
+		public XXssConfig headerValue(XXssProtectionHeaderWriter.HeaderValue headerValue) {
+			this.writer.setHeaderValue(headerValue);
 			return this;
 		}
 
@@ -1000,6 +1005,12 @@ public class HeadersConfigurer<H extends HttpSecurityBuilder<H>>
 
 	}
 
+	/**
+	 * @deprecated see <a href=
+	 * "https://owasp.org/www-community/controls/Certificate_and_Public_Key_Pinning">Certificate
+	 * and Public Key Pinning</a> for more context
+	 */
+	@Deprecated
 	public final class HpkpConfig {
 
 		private HpkpHeaderWriter writer;

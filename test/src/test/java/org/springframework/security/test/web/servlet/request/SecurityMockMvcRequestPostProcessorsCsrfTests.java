@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,22 +24,26 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessorsCsrfTests.Config.TheController;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
+import org.springframework.security.web.csrf.DeferredCsrfToken;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
@@ -156,9 +160,12 @@ public class SecurityMockMvcRequestPostProcessorsCsrfTests {
 		// @formatter:off
 		this.mockMvc.perform(post("/").with(csrf()));
 		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
 		HttpSessionCsrfTokenRepository repo = new HttpSessionCsrfTokenRepository();
-		CsrfToken token = repo.generateToken(request);
-		repo.saveToken(token, request, new MockHttpServletResponse());
+		CsrfTokenRequestHandler handler = new XorCsrfTokenRequestAttributeHandler();
+		DeferredCsrfToken deferredCsrfToken = repo.loadDeferredToken(request, response);
+		handler.handle(request, response, deferredCsrfToken::get);
+		CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
 		MockHttpServletRequestBuilder requestWithCsrf = post("/")
 			.param(token.getParameterName(), token.getToken())
 			.session((MockHttpSession) request.getSession());
@@ -227,11 +234,13 @@ public class SecurityMockMvcRequestPostProcessorsCsrfTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class Config extends WebSecurityConfigurerAdapter {
+	static class Config {
 
-		@Override
-		protected void configure(HttpSecurity http) {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			return http.build();
 		}
 
 		@RestController

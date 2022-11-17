@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.assertj.core.api.ListAssert;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,8 +32,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.builders.TestHttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.Authentication;
@@ -44,6 +43,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -99,92 +99,91 @@ public class NamespaceHttpCustomFilterTests {
 		return assertThat(filters);
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomFilterBeforeConfig extends WebSecurityConfigurerAdapter {
+	static class CustomFilterBeforeConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.addFilterBefore(new CustomFilter(), UsernamePasswordAuthenticationFilter.class)
 				.formLogin();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomFilterAfterConfig extends WebSecurityConfigurerAdapter {
+	static class CustomFilterAfterConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.addFilterAfter(new CustomFilter(), UsernamePasswordAuthenticationFilter.class)
 				.formLogin();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomFilterPositionConfig extends WebSecurityConfigurerAdapter {
+	static class CustomFilterPositionConfig {
 
-		CustomFilterPositionConfig() {
-			// do not add the default filters to make testing easier
-			super(true);
-		}
-
-		@Override
-		protected void configure(HttpSecurity http) {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
+			TestHttpSecurity.disableDefaults(http);
 			http
 				// this works so long as the CustomFilter extends one of the standard filters
 				// if not, use addFilterBefore or addFilterAfter
 				.addFilter(new CustomFilter());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomFilterPositionAtConfig extends WebSecurityConfigurerAdapter {
+	static class CustomFilterPositionAtConfig {
 
-		CustomFilterPositionAtConfig() {
-			// do not add the default filters to make testing easier
-			super(true);
-		}
-
-		@Override
-		protected void configure(HttpSecurity http) {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
+			TestHttpSecurity.disableDefaults(http);
 			http
 				.addFilterAt(new OtherCustomFilter(), UsernamePasswordAuthenticationFilter.class);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class NoAuthenticationManagerInHttpConfigurationConfig extends WebSecurityConfigurerAdapter {
+	static class NoAuthenticationManagerInHttpConfigurationConfig {
 
-		NoAuthenticationManagerInHttpConfigurationConfig() {
-			super(true);
-		}
-
-		@Override
-		protected AuthenticationManager authenticationManager() {
+		@Bean
+		AuthenticationManager authenticationManager() {
 			return new CustomAuthenticationManager();
 		}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
+			TestHttpSecurity.disableDefaults(http);
 			http
 				.authorizeRequests()
 					.anyRequest().hasRole("USER")
 					.and()
 				.addFilterBefore(new CustomFilter(), UsernamePasswordAuthenticationFilter.class);
+			return http.build();
 			// @formatter:on
 		}
 

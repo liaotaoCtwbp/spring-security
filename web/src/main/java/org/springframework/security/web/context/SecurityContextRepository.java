@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,15 @@
 
 package org.springframework.security.web.context;
 
+import java.util.function.Supplier;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.springframework.security.core.context.DeferredSecurityContext;
 import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.function.SingletonSupplier;
 
 /**
  * Strategy used for persisting a {@link SecurityContext} between requests.
@@ -48,15 +53,35 @@ public interface SecurityContextRepository {
 	 * to return wrapped versions of the request or response (or both), allowing them to
 	 * access implementation-specific state for the request. The values obtained from the
 	 * holder will be passed on to the filter chain and also to the <tt>saveContext</tt>
-	 * method when it is finally called. Implementations may wish to return a subclass of
+	 * method when it is finally called to allow implicit saves of the
+	 * <tt>SecurityContext</tt>. Implementations may wish to return a subclass of
 	 * {@link SaveContextOnUpdateOrErrorResponseWrapper} as the response object, which
 	 * guarantees that the context is persisted when an error or redirect occurs.
+	 * Implementations may allow passing in the original request response to allow
+	 * explicit saves.
 	 * @param requestResponseHolder holder for the current request and response for which
 	 * the context should be loaded.
 	 * @return The security context which should be used for the current request, never
 	 * null.
+	 * @deprecated Use {@link #loadDeferredContext(HttpServletRequest)} instead.
 	 */
+	@Deprecated
 	SecurityContext loadContext(HttpRequestResponseHolder requestResponseHolder);
+
+	/**
+	 * Defers loading the {@link SecurityContext} using the {@link HttpServletRequest}
+	 * until it is needed by the application.
+	 * @param request the {@link HttpServletRequest} to load the {@link SecurityContext}
+	 * from
+	 * @return a {@link DeferredSecurityContext} that returns the {@link SecurityContext}
+	 * which cannot be null
+	 * @since 5.8
+	 */
+	default DeferredSecurityContext loadDeferredContext(HttpServletRequest request) {
+		Supplier<SecurityContext> supplier = () -> loadContext(new HttpRequestResponseHolder(request, null));
+		return new SupplierDeferredSecurityContext(SingletonSupplier.of(supplier),
+				SecurityContextHolder.getContextHolderStrategy());
+	}
 
 	/**
 	 * Stores the security context on completion of a request.

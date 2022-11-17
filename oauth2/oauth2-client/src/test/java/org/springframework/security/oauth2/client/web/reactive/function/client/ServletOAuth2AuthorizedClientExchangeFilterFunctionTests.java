@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import java.util.function.Consumer;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,6 +64,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.oauth2.client.ClientAuthorizationException;
 import org.springframework.security.oauth2.client.JwtBearerOAuth2AuthorizedClientProvider;
 import org.springframework.security.oauth2.client.OAuth2AuthorizationContext;
@@ -74,7 +75,6 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProvider
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
 import org.springframework.security.oauth2.client.RefreshTokenOAuth2AuthorizedClientProvider;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.client.endpoint.DefaultClientCredentialsTokenResponseClient;
 import org.springframework.security.oauth2.client.endpoint.DefaultRefreshTokenTokenResponseClient;
 import org.springframework.security.oauth2.client.endpoint.JwtBearerGrantRequest;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
@@ -113,7 +113,6 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -222,35 +221,6 @@ public class ServletOAuth2AuthorizedClientExchangeFilterFunctionTests {
 	}
 
 	@Test
-	public void setClientCredentialsTokenResponseClientWhenClientIsNullThenThrowIllegalArgumentException() {
-		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.function.setClientCredentialsTokenResponseClient(null))
-				.withMessage("clientCredentialsTokenResponseClient cannot be null");
-	}
-
-	@Test
-	public void setClientCredentialsTokenResponseClientWhenNotDefaultAuthorizedClientManagerThenThrowIllegalStateException() {
-		assertThatIllegalStateException()
-				.isThrownBy(() -> this.function
-						.setClientCredentialsTokenResponseClient(new DefaultClientCredentialsTokenResponseClient()))
-				.withMessage("The client cannot be set when the constructor used is "
-						+ "\"ServletOAuth2AuthorizedClientExchangeFilterFunction(OAuth2AuthorizedClientManager)\". "
-						+ "Instead, use the constructor \"ServletOAuth2AuthorizedClientExchangeFilterFunction(ClientRegistrationRepository, "
-						+ "OAuth2AuthorizedClientRepository)\".");
-	}
-
-	@Test
-	public void setAccessTokenExpiresSkewWhenNotDefaultAuthorizedClientManagerThenThrowIllegalStateException() {
-		assertThatIllegalStateException()
-				.isThrownBy(() -> this.function.setAccessTokenExpiresSkew(Duration.ofSeconds(30)))
-				.isInstanceOf(IllegalStateException.class)
-				.withMessage("The accessTokenExpiresSkew cannot be set when the constructor used is "
-						+ "\"ServletOAuth2AuthorizedClientExchangeFilterFunction(OAuth2AuthorizedClientManager)\". "
-						+ "Instead, use the constructor \"ServletOAuth2AuthorizedClientExchangeFilterFunction(ClientRegistrationRepository, "
-						+ "OAuth2AuthorizedClientRepository)\".");
-	}
-
-	@Test
 	public void defaultRequestRequestResponseWhenNullRequestContextThenRequestAndResponseNull() {
 		Map<String, Object> attrs = getDefaultRequestAttributes();
 		assertThat(ServletOAuth2AuthorizedClientExchangeFilterFunction.getRequest(attrs)).isNull();
@@ -279,6 +249,18 @@ public class ServletOAuth2AuthorizedClientExchangeFilterFunctionTests {
 		Map<String, Object> attrs = getDefaultRequestAttributes();
 		assertThat(ServletOAuth2AuthorizedClientExchangeFilterFunction.getAuthentication(attrs))
 				.isEqualTo(this.authentication);
+		verifyNoInteractions(this.authorizedClientRepository);
+	}
+
+	@Test
+	public void defaultRequestAuthenticationWhenCustomSecurityContextHolderStrategyThenAuthenticationSet() {
+		SecurityContextHolderStrategy strategy = mock(SecurityContextHolderStrategy.class);
+		given(strategy.getContext()).willReturn(new SecurityContextImpl(this.authentication));
+		this.function.setSecurityContextHolderStrategy(strategy);
+		Map<String, Object> attrs = getDefaultRequestAttributes();
+		assertThat(ServletOAuth2AuthorizedClientExchangeFilterFunction.getAuthentication(attrs))
+				.isEqualTo(this.authentication);
+		verify(strategy).getContext();
 		verifyNoInteractions(this.authorizedClientRepository);
 	}
 
@@ -658,8 +640,7 @@ public class ServletOAuth2AuthorizedClientExchangeFilterFunctionTests {
 		final ClientRequest request2 = ClientRequest.create(HttpMethod.GET, URI.create("https://example2.com")).build();
 		Context context = context(servletRequest, servletResponse, authentication);
 		this.function.filter(request1, this.exchange)
-				.flatMap((response) -> this.function.filter(request2, this.exchange)).subscriberContext(context)
-				.block();
+				.flatMap((response) -> this.function.filter(request2, this.exchange)).contextWrite(context).block();
 		List<ClientRequest> requests = this.exchange.getRequests();
 		assertThat(requests).hasSize(2);
 		ClientRequest request = requests.get(0);

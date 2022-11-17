@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,21 +18,21 @@ package org.springframework.security.config.annotation.web.configurers;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -97,18 +97,19 @@ public class NamespaceHttpServerAccessDeniedHandlerTests {
 	}
 
 	private static Authentication user() {
-		return new UsernamePasswordAuthenticationToken("user", null, AuthorityUtils.NO_AUTHORITIES);
+		return UsernamePasswordAuthenticationToken.authenticated("user", null, AuthorityUtils.NO_AUTHORITIES);
 	}
 
 	private <T> T verifyBean(Class<T> beanClass) {
 		return verify(this.spring.getContext().getBean(beanClass));
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AccessDeniedPageConfig extends WebSecurityConfigurerAdapter {
+	static class AccessDeniedPageConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -116,16 +117,18 @@ public class NamespaceHttpServerAccessDeniedHandlerTests {
 					.and()
 				.exceptionHandling()
 					.accessDeniedPage("/AccessDeniedPageConfig");
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AccessDeniedPageInLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class AccessDeniedPageInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -135,16 +138,18 @@ public class NamespaceHttpServerAccessDeniedHandlerTests {
 				.exceptionHandling((exceptionHandling) ->
 					exceptionHandling.accessDeniedPage("/AccessDeniedPageConfig")
 				);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AccessDeniedHandlerRefConfig extends WebSecurityConfigurerAdapter {
+	static class AccessDeniedHandlerRefConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -152,6 +157,7 @@ public class NamespaceHttpServerAccessDeniedHandlerTests {
 					.and()
 				.exceptionHandling()
 					.accessDeniedHandler(accessDeniedHandler());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -162,13 +168,14 @@ public class NamespaceHttpServerAccessDeniedHandlerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AccessDeniedHandlerRefInLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class AccessDeniedHandlerRefInLambdaConfig {
 
 		static AccessDeniedHandler accessDeniedHandler = mock(AccessDeniedHandler.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -178,6 +185,7 @@ public class NamespaceHttpServerAccessDeniedHandlerTests {
 				.exceptionHandling((exceptionHandling) ->
 						exceptionHandling.accessDeniedHandler(accessDeniedHandler())
 				);
+			return http.build();
 			// @formatter:on
 		}
 

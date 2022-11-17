@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.springframework.security.web.access;
 import java.util.Collection;
 
 import jakarta.servlet.ServletContext;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -38,7 +37,9 @@ import org.springframework.web.context.ServletContextAware;
  * @author Ben Alex
  * @author Luke Taylor
  * @since 3.0
+ * @deprecated Use {@link AuthorizationManagerWebInvocationPrivilegeEvaluator} instead
  */
+@Deprecated
 public class DefaultWebInvocationPrivilegeEvaluator implements WebInvocationPrivilegeEvaluator, ServletContextAware {
 
 	protected static final Log logger = LogFactory.getLog(DefaultWebInvocationPrivilegeEvaluator.class);

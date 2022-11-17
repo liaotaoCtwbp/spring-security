@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -58,6 +57,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * </p>
  *
  * @author Rob Winch
+ * @author Steve Riesenberg
  * @since 3.2
  */
 public final class CsrfFilter extends OncePerRequestFilter {
@@ -87,9 +87,15 @@ public final class CsrfFilter extends OncePerRequestFilter {
 
 	private AccessDeniedHandler accessDeniedHandler = new AccessDeniedHandlerImpl();
 
-	public CsrfFilter(CsrfTokenRepository csrfTokenRepository) {
-		Assert.notNull(csrfTokenRepository, "csrfTokenRepository cannot be null");
-		this.tokenRepository = csrfTokenRepository;
+	private CsrfTokenRequestHandler requestHandler = new XorCsrfTokenRequestAttributeHandler();
+
+	/**
+	 * Creates a new instance.
+	 * @param tokenRepository the {@link CsrfTokenRepository} to use
+	 */
+	public CsrfFilter(CsrfTokenRepository tokenRepository) {
+		Assert.notNull(tokenRepository, "tokenRepository cannot be null");
+		this.tokenRepository = tokenRepository;
 	}
 
 	@Override
@@ -100,15 +106,8 @@ public final class CsrfFilter extends OncePerRequestFilter {
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
 			throws ServletException, IOException {
-		request.setAttribute(HttpServletResponse.class.getName(), response);
-		CsrfToken csrfToken = this.tokenRepository.loadToken(request);
-		boolean missingToken = (csrfToken == null);
-		if (missingToken) {
-			csrfToken = this.tokenRepository.generateToken(request);
-			this.tokenRepository.saveToken(csrfToken, request, response);
-		}
-		request.setAttribute(CsrfToken.class.getName(), csrfToken);
-		request.setAttribute(csrfToken.getParameterName(), csrfToken);
+		DeferredCsrfToken deferredCsrfToken = this.tokenRepository.loadDeferredToken(request, response);
+		this.requestHandler.handle(request, response, deferredCsrfToken::get);
 		if (!this.requireCsrfProtectionMatcher.matches(request)) {
 			if (this.logger.isTraceEnabled()) {
 				this.logger.trace("Did not protect against CSRF since request did not match "
@@ -117,11 +116,10 @@ public final class CsrfFilter extends OncePerRequestFilter {
 			filterChain.doFilter(request, response);
 			return;
 		}
-		String actualToken = request.getHeader(csrfToken.getHeaderName());
-		if (actualToken == null) {
-			actualToken = request.getParameter(csrfToken.getParameterName());
-		}
+		CsrfToken csrfToken = deferredCsrfToken.get();
+		String actualToken = this.requestHandler.resolveCsrfTokenValue(request, csrfToken);
 		if (!equalsConstantTime(csrfToken.getToken(), actualToken)) {
+			boolean missingToken = deferredCsrfToken.isGenerated();
 			this.logger.debug(
 					LogMessage.of(() -> "Invalid CSRF token found for " + UrlUtils.buildFullRequestUrl(request)));
 			AccessDeniedException exception = (!missingToken) ? new InvalidCsrfTokenException(csrfToken, actualToken)
@@ -165,6 +163,21 @@ public final class CsrfFilter extends OncePerRequestFilter {
 	public void setAccessDeniedHandler(AccessDeniedHandler accessDeniedHandler) {
 		Assert.notNull(accessDeniedHandler, "accessDeniedHandler cannot be null");
 		this.accessDeniedHandler = accessDeniedHandler;
+	}
+
+	/**
+	 * Specifies a {@link CsrfTokenRequestHandler} that is used to make the
+	 * {@link CsrfToken} available as a request attribute.
+	 *
+	 * <p>
+	 * The default is {@link CsrfTokenRequestAttributeHandler}.
+	 * </p>
+	 * @param requestHandler the {@link CsrfTokenRequestHandler} to use
+	 * @since 5.8
+	 */
+	public void setRequestHandler(CsrfTokenRequestHandler requestHandler) {
+		Assert.notNull(requestHandler, "requestHandler cannot be null");
+		this.requestHandler = requestHandler;
 	}
 
 	/**

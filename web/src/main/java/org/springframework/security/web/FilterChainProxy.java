@@ -28,18 +28,19 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.springframework.core.log.LogMessage;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.firewall.DefaultRequestRejectedHandler;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.web.firewall.FirewalledRequest;
 import org.springframework.security.web.firewall.HttpFirewall;
+import org.springframework.security.web.firewall.HttpStatusRequestRejectedHandler;
 import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.security.web.firewall.RequestRejectedHandler;
 import org.springframework.security.web.firewall.StrictHttpFirewall;
+import org.springframework.security.web.util.ThrowableAnalyzer;
 import org.springframework.security.web.util.UrlUtils;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
@@ -146,13 +147,20 @@ public class FilterChainProxy extends GenericFilterBean {
 
 	private static final String FILTER_APPLIED = FilterChainProxy.class.getName().concat(".APPLIED");
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+			.getContextHolderStrategy();
+
 	private List<SecurityFilterChain> filterChains;
 
 	private FilterChainValidator filterChainValidator = new NullFilterChainValidator();
 
 	private HttpFirewall firewall = new StrictHttpFirewall();
 
-	private RequestRejectedHandler requestRejectedHandler = new DefaultRequestRejectedHandler();
+	private RequestRejectedHandler requestRejectedHandler = new HttpStatusRequestRejectedHandler();
+
+	private ThrowableAnalyzer throwableAnalyzer = new ThrowableAnalyzer();
+
+	private FilterChainDecorator filterChainDecorator = new VirtualFilterChainDecorator();
 
 	public FilterChainProxy() {
 	}
@@ -182,11 +190,18 @@ public class FilterChainProxy extends GenericFilterBean {
 			request.setAttribute(FILTER_APPLIED, Boolean.TRUE);
 			doFilterInternal(request, response, chain);
 		}
-		catch (RequestRejectedException ex) {
-			this.requestRejectedHandler.handle((HttpServletRequest) request, (HttpServletResponse) response, ex);
+		catch (Exception ex) {
+			Throwable[] causeChain = this.throwableAnalyzer.determineCauseChain(ex);
+			Throwable requestRejectedException = this.throwableAnalyzer
+					.getFirstThrowableOfType(RequestRejectedException.class, causeChain);
+			if (!(requestRejectedException instanceof RequestRejectedException)) {
+				throw ex;
+			}
+			this.requestRejectedHandler.handle((HttpServletRequest) request, (HttpServletResponse) response,
+					(RequestRejectedException) requestRejectedException);
 		}
 		finally {
-			SecurityContextHolder.clearContext();
+			this.securityContextHolderStrategy.clearContext();
 			request.removeAttribute(FILTER_APPLIED);
 		}
 	}
@@ -201,14 +216,21 @@ public class FilterChainProxy extends GenericFilterBean {
 				logger.trace(LogMessage.of(() -> "No security for " + requestLine(firewallRequest)));
 			}
 			firewallRequest.reset();
-			chain.doFilter(firewallRequest, firewallResponse);
+			this.filterChainDecorator.decorate(chain).doFilter(firewallRequest, firewallResponse);
 			return;
 		}
 		if (logger.isDebugEnabled()) {
 			logger.debug(LogMessage.of(() -> "Securing " + requestLine(firewallRequest)));
 		}
-		VirtualFilterChain virtualFilterChain = new VirtualFilterChain(firewallRequest, chain, filters);
-		virtualFilterChain.doFilter(firewallRequest, firewallResponse);
+		FilterChain reset = (req, res) -> {
+			if (logger.isDebugEnabled()) {
+				logger.debug(LogMessage.of(() -> "Secured " + requestLine(firewallRequest)));
+			}
+			// Deactivate path stripping as we exit the security filter chain
+			firewallRequest.reset();
+			chain.doFilter(req, res);
+		};
+		this.filterChainDecorator.decorate(reset, filters).doFilter(firewallRequest, firewallResponse);
 	}
 
 	/**
@@ -236,7 +258,7 @@ public class FilterChainProxy extends GenericFilterBean {
 	 * @return matching filter list
 	 */
 	public List<Filter> getFilters(String url) {
-		return getFilters(this.firewall.getFirewalledRequest((new FilterInvocation(url, "GET").getRequest())));
+		return getFilters(this.firewall.getFirewalledRequest(new FilterInvocation(url, "GET").getRequest()));
 	}
 
 	/**
@@ -248,6 +270,17 @@ public class FilterChainProxy extends GenericFilterBean {
 	}
 
 	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
+	}
+
+	/**
 	 * Used (internally) to specify a validation strategy for the filters in each
 	 * configured chain.
 	 * @param filterChainValidator the validator instance which will be invoked on during
@@ -255,6 +288,20 @@ public class FilterChainProxy extends GenericFilterBean {
 	 */
 	public void setFilterChainValidator(FilterChainValidator filterChainValidator) {
 		this.filterChainValidator = filterChainValidator;
+	}
+
+	/**
+	 * Used to decorate the original {@link FilterChain} for each request
+	 *
+	 * <p>
+	 * By default, this decorates the filter chain with a {@link VirtualFilterChain} that
+	 * iterates through security filters and then delegates to the original chain
+	 * @param filterChainDecorator the strategy for constructing the filter chain
+	 * @since 6.0
+	 */
+	public void setFilterChainDecorator(FilterChainDecorator filterChainDecorator) {
+		Assert.notNull(filterChainDecorator, "filterChainDecorator cannot be null");
+		this.filterChainDecorator = filterChainDecorator;
 	}
 
 	/**
@@ -302,36 +349,27 @@ public class FilterChainProxy extends GenericFilterBean {
 
 		private final List<Filter> additionalFilters;
 
-		private final FirewalledRequest firewalledRequest;
-
 		private final int size;
 
 		private int currentPosition = 0;
 
-		private VirtualFilterChain(FirewalledRequest firewalledRequest, FilterChain chain,
-				List<Filter> additionalFilters) {
+		private VirtualFilterChain(FilterChain chain, List<Filter> additionalFilters) {
 			this.originalChain = chain;
 			this.additionalFilters = additionalFilters;
 			this.size = additionalFilters.size();
-			this.firewalledRequest = firewalledRequest;
 		}
 
 		@Override
 		public void doFilter(ServletRequest request, ServletResponse response) throws IOException, ServletException {
 			if (this.currentPosition == this.size) {
-				if (logger.isDebugEnabled()) {
-					logger.debug(LogMessage.of(() -> "Secured " + requestLine(this.firewalledRequest)));
-				}
-				// Deactivate path stripping as we exit the security filter chain
-				this.firewalledRequest.reset();
 				this.originalChain.doFilter(request, response);
 				return;
 			}
 			this.currentPosition++;
 			Filter nextFilter = this.additionalFilters.get(this.currentPosition - 1);
 			if (logger.isTraceEnabled()) {
-				logger.trace(LogMessage.format("Invoking %s (%d/%d)", nextFilter.getClass().getSimpleName(),
-						this.currentPosition, this.size));
+				String name = nextFilter.getClass().getSimpleName();
+				logger.trace(LogMessage.format("Invoking %s (%d/%d)", name, this.currentPosition, this.size));
 			}
 			nextFilter.doFilter(request, response, this);
 		}
@@ -348,6 +386,63 @@ public class FilterChainProxy extends GenericFilterBean {
 
 		@Override
 		public void validate(FilterChainProxy filterChainProxy) {
+		}
+
+	}
+
+	/**
+	 * A strategy for decorating the provided filter chain with one that accounts for the
+	 * {@link SecurityFilterChain} for a given request.
+	 *
+	 * @author Josh Cummings
+	 * @since 6.0
+	 */
+	public interface FilterChainDecorator {
+
+		/**
+		 * Provide a new {@link FilterChain} that accounts for needed security
+		 * considerations when there are no security filters.
+		 * @param original the original {@link FilterChain}
+		 * @return a security-enabled {@link FilterChain}
+		 */
+		default FilterChain decorate(FilterChain original) {
+			return decorate(original, Collections.emptyList());
+		}
+
+		/**
+		 * Provide a new {@link FilterChain} that accounts for the provided filters as
+		 * well as teh original filter chain.
+		 * @param original the original {@link FilterChain}
+		 * @param filters the security filters
+		 * @return a security-enabled {@link FilterChain} that includes the provided
+		 * filters
+		 */
+		FilterChain decorate(FilterChain original, List<Filter> filters);
+
+	}
+
+	/**
+	 * A {@link FilterChainDecorator} that uses the {@link VirtualFilterChain}
+	 *
+	 * @author Josh Cummings
+	 * @since 6.0
+	 */
+	public static final class VirtualFilterChainDecorator implements FilterChainDecorator {
+
+		/**
+		 * {@inheritDoc}
+		 */
+		@Override
+		public FilterChain decorate(FilterChain original) {
+			return original;
+		}
+
+		/**
+		 * {@inheritDoc}
+		 */
+		@Override
+		public FilterChain decorate(FilterChain original, List<Filter> filters) {
+			return new VirtualFilterChain(original, filters);
 		}
 
 	}

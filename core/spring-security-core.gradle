@@ -10,6 +10,7 @@ dependencies {
 	api 'org.springframework:spring-context'
 	api 'org.springframework:spring-core'
 	api 'org.springframework:spring-expression'
+	api 'io.micrometer:micrometer-observation'
 
 	optional 'com.fasterxml.jackson.core:jackson-databind'
 	optional 'io.projectreactor:reactor-core'
@@ -30,7 +31,6 @@ dependencies {
 	testImplementation "org.mockito:mockito-junit-jupiter"
 	testImplementation "org.springframework:spring-test"
 	testImplementation 'org.skyscreamer:jsonassert'
-	testImplementation 'org.slf4j:jcl-over-slf4j'
 	testImplementation 'org.springframework:spring-test'
 
 	testRuntimeOnly 'org.hsqldb:hsqldb'

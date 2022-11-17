@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.config.annotation.ObjectPostProcessor;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.userdetails.PasswordEncodedUser;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -83,7 +85,9 @@ public class DefaultLoginPageConfigurerTests {
 		String csrfAttributeName = HttpSessionCsrfTokenRepository.class.getName().concat(".CSRF_TOKEN");
 		// @formatter:off
 		this.mvc.perform(get("/login").sessionAttr(csrfAttributeName, csrfToken))
-				.andExpect(content().string("<!DOCTYPE html>\n"
+				.andExpect((result) -> {
+					CsrfToken token = (CsrfToken) result.getRequest().getAttribute(CsrfToken.class.getName());
+					assertThat(result.getResponse().getContentAsString()).isEqualTo("<!DOCTYPE html>\n"
 						+ "<html lang=\"en\">\n"
 						+ "  <head>\n"
 						+ "    <meta charset=\"utf-8\">\n"
@@ -106,11 +110,12 @@ public class DefaultLoginPageConfigurerTests {
 						+ "          <label for=\"password\" class=\"sr-only\">Password</label>\n"
 						+ "          <input type=\"password\" id=\"password\" name=\"password\" class=\"form-control\" placeholder=\"Password\" required>\n"
 						+ "        </p>\n"
-						+ "<input name=\"" + csrfToken.getParameterName() + "\" type=\"hidden\" value=\"" + csrfToken.getToken() + "\" />\n"
+						+ "<input name=\"" + token.getParameterName() + "\" type=\"hidden\" value=\"" + token.getToken() + "\" />\n"
 						+ "        <button class=\"btn btn-lg btn-primary btn-block\" type=\"submit\">Sign in</button>\n"
 						+ "      </form>\n"
 						+ "</div>\n"
-						+ "</body></html>"));
+						+ "</body></html>");
+				});
 		// @formatter:on
 	}
 
@@ -129,7 +134,9 @@ public class DefaultLoginPageConfigurerTests {
 		// @formatter:off
 		this.mvc.perform(get("/login?error").session((MockHttpSession) mvcResult.getRequest().getSession())
 				.sessionAttr(csrfAttributeName, csrfToken))
-				.andExpect(content().string("<!DOCTYPE html>\n"
+				.andExpect((result) -> {
+					CsrfToken token = (CsrfToken) result.getRequest().getAttribute(CsrfToken.class.getName());
+					assertThat(result.getResponse().getContentAsString()).isEqualTo("<!DOCTYPE html>\n"
 						+ "<html lang=\"en\">\n"
 						+ "  <head>\n"
 						+ "    <meta charset=\"utf-8\">\n"
@@ -151,11 +158,12 @@ public class DefaultLoginPageConfigurerTests {
 						+ "          <label for=\"password\" class=\"sr-only\">Password</label>\n"
 						+ "          <input type=\"password\" id=\"password\" name=\"password\" class=\"form-control\" placeholder=\"Password\" required>\n"
 						+ "        </p>\n"
-						+ "<input name=\"" + csrfToken.getParameterName() + "\" type=\"hidden\" value=\"" + csrfToken.getToken() + "\" />\n"
+						+ "<input name=\"" + token.getParameterName() + "\" type=\"hidden\" value=\"" + token.getToken() + "\" />\n"
 						+ "        <button class=\"btn btn-lg btn-primary btn-block\" type=\"submit\">Sign in</button>\n"
 						+ "      </form>\n"
 						+ "</div>\n"
-						+ "</body></html>"));
+						+ "</body></html>");
+				});
 		// @formatter:on
 	}
 
@@ -178,7 +186,9 @@ public class DefaultLoginPageConfigurerTests {
 		String csrfAttributeName = HttpSessionCsrfTokenRepository.class.getName().concat(".CSRF_TOKEN");
 		// @formatter:off
 		this.mvc.perform(get("/login?logout").sessionAttr(csrfAttributeName, csrfToken))
-				.andExpect(content().string("<!DOCTYPE html>\n"
+				.andExpect((result) -> {
+					CsrfToken token = (CsrfToken) result.getRequest().getAttribute(CsrfToken.class.getName());
+					assertThat(result.getResponse().getContentAsString()).isEqualTo("<!DOCTYPE html>\n"
 						+ "<html lang=\"en\">\n"
 						+ "  <head>\n"
 						+ "    <meta charset=\"utf-8\">\n"
@@ -201,11 +211,12 @@ public class DefaultLoginPageConfigurerTests {
 						+ "          <label for=\"password\" class=\"sr-only\">Password</label>\n"
 						+ "          <input type=\"password\" id=\"password\" name=\"password\" class=\"form-control\" placeholder=\"Password\" required>\n"
 						+ "        </p>\n"
-						+ "<input name=\"" + csrfToken.getParameterName() + "\" type=\"hidden\" value=\"" + csrfToken.getToken() + "\" />\n"
+						+ "<input name=\"" + token.getParameterName() + "\" type=\"hidden\" value=\"" + token.getToken() + "\" />\n"
 						+ "        <button class=\"btn btn-lg btn-primary btn-block\" type=\"submit\">Sign in</button>\n"
 						+ "      </form>\n"
 						+ "</div>\n"
-						+ "</body></html>"));
+						+ "</body></html>");
+				});
 		// @formatter:on
 	}
 
@@ -228,7 +239,9 @@ public class DefaultLoginPageConfigurerTests {
 		String csrfAttributeName = HttpSessionCsrfTokenRepository.class.getName().concat(".CSRF_TOKEN");
 		// @formatter:off
 		this.mvc.perform(get("/login").sessionAttr(csrfAttributeName, csrfToken))
-				.andExpect(content().string("<!DOCTYPE html>\n"
+				.andExpect((result) -> {
+					CsrfToken token = (CsrfToken) result.getRequest().getAttribute(CsrfToken.class.getName());
+					assertThat(result.getResponse().getContentAsString()).isEqualTo("<!DOCTYPE html>\n"
 						+ "<html lang=\"en\">\n"
 						+ "  <head>\n"
 						+ "    <meta charset=\"utf-8\">\n"
@@ -252,92 +265,12 @@ public class DefaultLoginPageConfigurerTests {
 						+ "          <input type=\"password\" id=\"password\" name=\"password\" class=\"form-control\" placeholder=\"Password\" required>\n"
 						+ "        </p>\n"
 						+ "<p><input type='checkbox' name='remember-me'/> Remember me on this computer.</p>\n"
-						+ "<input name=\"" + csrfToken.getParameterName() + "\" type=\"hidden\" value=\"" + csrfToken.getToken() + "\" />\n"
+						+ "<input name=\"" + token.getParameterName() + "\" type=\"hidden\" value=\"" + token.getToken() + "\" />\n"
 						+ "        <button class=\"btn btn-lg btn-primary btn-block\" type=\"submit\">Sign in</button>\n"
 						+ "      </form>\n"
 						+ "</div>\n"
-						+ "</body></html>"));
-		// @formatter:on
-	}
-
-	@Test
-	public void loginPageWhenOpenIdLoginConfiguredThenOpedIdLoginPage() throws Exception {
-		this.spring.register(DefaultLoginPageWithOpenIDConfig.class).autowire();
-		CsrfToken csrfToken = new DefaultCsrfToken("X-CSRF-TOKEN", "_csrf", "BaseSpringSpec_CSRFTOKEN");
-		String csrfAttributeName = HttpSessionCsrfTokenRepository.class.getName().concat(".CSRF_TOKEN");
-		// @formatter:off
-		this.mvc.perform(get("/login").sessionAttr(csrfAttributeName, csrfToken))
-				.andExpect(content().string("<!DOCTYPE html>\n"
-						+ "<html lang=\"en\">\n"
-						+ "  <head>\n"
-						+ "    <meta charset=\"utf-8\">\n"
-						+ "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">\n"
-						+ "    <meta name=\"description\" content=\"\">\n"
-						+ "    <meta name=\"author\" content=\"\">\n"
-						+ "    <title>Please sign in</title>\n"
-						+ "    <link href=\"https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta/css/bootstrap.min.css\" rel=\"stylesheet\" integrity=\"sha384-/Y6pD6FV/Vv2HJnA6t+vslU6fwYXjCFtcEpHbNJ0lyAFsXTsjBbfaDjzALeQsN6M\" crossorigin=\"anonymous\">\n"
-						+ "    <link href=\"https://getbootstrap.com/docs/4.0/examples/signin/signin.css\" rel=\"stylesheet\" crossorigin=\"anonymous\"/>\n"
-						+ "  </head>\n"
-						+ "  <body>\n"
-						+ "     <div class=\"container\">\n"
-						+ "      <form name=\"oidf\" class=\"form-signin\" method=\"post\" action=\"/login/openid\">\n"
-						+ "        <h2 class=\"form-signin-heading\">Login with OpenID Identity</h2>\n"
-						+ "        <p>\n"
-						+ "          <label for=\"username\" class=\"sr-only\">Identity</label>\n"
-						+ "          <input type=\"text\" id=\"username\" name=\"openid_identifier\" class=\"form-control\" placeholder=\"Username\" required autofocus>\n"
-						+ "        </p>\n"
-						+ "<input name=\"" + csrfToken.getParameterName() + "\" type=\"hidden\" value=\"" + csrfToken.getToken() + "\" />\n"
-						+ "        <button class=\"btn btn-lg btn-primary btn-block\" type=\"submit\">Sign in</button>\n"
-						+ "      </form>\n"
-						+ "</div>\n"
-						+ "</body></html>"));
-		// @formatter:on
-	}
-
-	@Test
-	public void loginPageWhenOpenIdLoginAndFormLoginAndRememberMeConfiguredThenOpedIdLoginPage() throws Exception {
-		this.spring.register(DefaultLoginPageWithFormLoginOpenIDRememberMeConfig.class).autowire();
-		CsrfToken csrfToken = new DefaultCsrfToken("X-CSRF-TOKEN", "_csrf", "BaseSpringSpec_CSRFTOKEN");
-		String csrfAttributeName = HttpSessionCsrfTokenRepository.class.getName().concat(".CSRF_TOKEN");
-		// @formatter:off
-		this.mvc.perform(get("/login").sessionAttr(csrfAttributeName, csrfToken))
-				.andExpect(content().string("<!DOCTYPE html>\n"
-						+ "<html lang=\"en\">\n"
-						+ "  <head>\n"
-						+ "    <meta charset=\"utf-8\">\n"
-						+ "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">\n"
-						+ "    <meta name=\"description\" content=\"\">\n"
-						+ "    <meta name=\"author\" content=\"\">\n"
-						+ "    <title>Please sign in</title>\n"
-						+ "    <link href=\"https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta/css/bootstrap.min.css\" rel=\"stylesheet\" integrity=\"sha384-/Y6pD6FV/Vv2HJnA6t+vslU6fwYXjCFtcEpHbNJ0lyAFsXTsjBbfaDjzALeQsN6M\" crossorigin=\"anonymous\">\n"
-						+ "    <link href=\"https://getbootstrap.com/docs/4.0/examples/signin/signin.css\" rel=\"stylesheet\" crossorigin=\"anonymous\"/>\n"
-						+ "  </head>\n"
-						+ "  <body>\n"
-						+ "     <div class=\"container\">\n"
-						+ "      <form class=\"form-signin\" method=\"post\" action=\"/login\">\n"
-						+ "        <h2 class=\"form-signin-heading\">Please sign in</h2>\n" + "        <p>\n"
-						+ "          <label for=\"username\" class=\"sr-only\">Username</label>\n"
-						+ "          <input type=\"text\" id=\"username\" name=\"username\" class=\"form-control\" placeholder=\"Username\" required autofocus>\n"
-						+ "        </p>\n"
-						+ "        <p>\n"
-						+ "          <label for=\"password\" class=\"sr-only\">Password</label>\n"
-						+ "          <input type=\"password\" id=\"password\" name=\"password\" class=\"form-control\" placeholder=\"Password\" required>\n"
-						+ "        </p>\n"
-						+ "<p><input type='checkbox' name='remember-me'/> Remember me on this computer.</p>\n"
-						+ "<input name=\"" + csrfToken.getParameterName() + "\" type=\"hidden\" value=\"" + csrfToken.getToken() + "\" />\n"
-						+ "        <button class=\"btn btn-lg btn-primary btn-block\" type=\"submit\">Sign in</button>\n"
-						+ "      </form>\n"
-						+ "      <form name=\"oidf\" class=\"form-signin\" method=\"post\" action=\"/login/openid\">\n"
-						+ "        <h2 class=\"form-signin-heading\">Login with OpenID Identity</h2>\n"
-						+ "        <p>\n" + "          <label for=\"username\" class=\"sr-only\">Identity</label>\n"
-						+ "          <input type=\"text\" id=\"username\" name=\"openid_identifier\" class=\"form-control\" placeholder=\"Username\" required autofocus>\n"
-						+ "        </p>\n"
-						+ "<p><input type='checkbox' name='remember-me'/> Remember me on this computer.</p>\n"
-						+ "<input name=\"" + csrfToken.getParameterName() + "\" type=\"hidden\" value=\"" + csrfToken.getToken() + "\" />\n"
-						+ "        <button class=\"btn btn-lg btn-primary btn-block\" type=\"submit\">Sign in</button>\n"
-						+ "      </form>\n"
-						+ "</div>\n"
-						+ "</body></html>"));
+						+ "</body></html>");
+				});
 		// @formatter:on
 	}
 
@@ -391,11 +324,12 @@ public class DefaultLoginPageConfigurerTests {
 		this.mvc.perform(get("/logout").with(user("user"))).andExpect(status().isNotFound());
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultLoginPageConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultLoginPageConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -403,24 +337,22 @@ public class DefaultLoginPageConfigurerTests {
 					.and()
 				.formLogin();
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication()
-					.withUser(PasswordEncodedUser.user());
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user());
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultLoginPageCustomLogoutSuccessHandlerConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultLoginPageCustomLogoutSuccessHandlerConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -430,16 +362,18 @@ public class DefaultLoginPageConfigurerTests {
 					.logoutSuccessHandler(new SimpleUrlLogoutSuccessHandler())
 					.and()
 				.formLogin();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultLoginPageCustomLogoutSuccessUrlConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultLoginPageCustomLogoutSuccessUrlConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -449,16 +383,18 @@ public class DefaultLoginPageConfigurerTests {
 					.logoutSuccessUrl("/login?logout")
 					.and()
 				.formLogin();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultLoginPageWithRememberMeConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultLoginPageWithRememberMeConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -467,52 +403,23 @@ public class DefaultLoginPageConfigurerTests {
 				.formLogin()
 					.and()
 				.rememberMe();
+			return http.build();
 			// @formatter:on
+		}
+
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user());
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultLoginPageWithOpenIDConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultLoginWithCustomAuthenticationEntryPointConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
-			// @formatter:off
-			http
-				.authorizeRequests()
-					.anyRequest().hasRole("USER")
-					.and()
-				.openidLogin();
-			// @formatter:on
-		}
-
-	}
-
-	@EnableWebSecurity
-	static class DefaultLoginPageWithFormLoginOpenIDRememberMeConfig extends WebSecurityConfigurerAdapter {
-
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
-			// @formatter:off
-			http
-				.authorizeRequests()
-					.anyRequest().hasRole("USER")
-					.and()
-				.rememberMe()
-					.and()
-				.formLogin()
-					.and()
-				.openidLogin();
-			// @formatter:on
-		}
-
-	}
-
-	@EnableWebSecurity
-	static class DefaultLoginWithCustomAuthenticationEntryPointConfig extends WebSecurityConfigurerAdapter {
-
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.exceptionHandling()
@@ -522,23 +429,26 @@ public class DefaultLoginPageConfigurerTests {
 					.anyRequest().hasRole("USER")
 					.and()
 				.formLogin();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ObjectPostProcessorConfig extends WebSecurityConfigurerAdapter {
+	static class ObjectPostProcessorConfig {
 
 		static ObjectPostProcessor<Object> objectPostProcessor;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.exceptionHandling()
 					.and()
 				.formLogin();
+			return http.build();
 			// @formatter:on
 		}
 
@@ -549,27 +459,30 @@ public class DefaultLoginPageConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultLogoutPageConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultLogoutPageConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorize) -> authorize
 					.anyRequest().authenticated()
 				)
 				.formLogin(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class LogoutDisabledConfig extends WebSecurityConfigurerAdapter {
+	static class LogoutDisabledConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 					.authorizeRequests((authorize) -> authorize
@@ -579,6 +492,7 @@ public class DefaultLoginPageConfigurerTests {
 					.logout((logout) -> logout
 							.disable()
 					);
+			return http.build();
 			// @formatter:on
 		}
 

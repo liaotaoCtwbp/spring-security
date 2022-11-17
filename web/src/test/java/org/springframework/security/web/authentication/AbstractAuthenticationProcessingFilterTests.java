@@ -22,11 +22,11 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-
 import org.apache.commons.logging.Log;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import org.springframework.mock.web.MockFilterConfig;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -34,14 +34,18 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.TestAuthentication;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.rememberme.AbstractRememberMeServicesTests;
 import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.firewall.DefaultHttpFirewall;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -185,6 +189,8 @@ public class AbstractAuthenticationProcessingFilterTests {
 		assertThat(response.getRedirectedUrl()).isEqualTo("/mycontext/logged_in.jsp");
 		assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
 		assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString()).isEqualTo("test");
+		assertThat(request.getAttribute(RequestAttributeSecurityContextRepository.DEFAULT_REQUEST_ATTR_NAME))
+				.isNotNull();
 		// Should still have the same session
 		assertThat(request.getSession()).isEqualTo(sessionPreAuth);
 	}
@@ -212,6 +218,8 @@ public class AbstractAuthenticationProcessingFilterTests {
 		assertThat(response.getRedirectedUrl()).isEqualTo("/mycontext/logged_in.jsp");
 		assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
 		assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString()).isEqualTo("test");
+		assertThat(request.getAttribute(RequestAttributeSecurityContextRepository.DEFAULT_REQUEST_ATTR_NAME))
+				.isNotNull();
 		// Should still have the same session
 		assertThat(request.getSession()).isEqualTo(sessionPreAuth);
 	}
@@ -241,6 +249,8 @@ public class AbstractAuthenticationProcessingFilterTests {
 		assertThat(response.getRedirectedUrl()).isEqualTo("/mycontext/logged_in.jsp");
 		assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
 		assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString()).isEqualTo("test");
+		assertThat(request.getAttribute(RequestAttributeSecurityContextRepository.DEFAULT_REQUEST_ATTR_NAME))
+				.isNotNull();
 		// Should still have the same session
 		assertThat(request.getSession()).isEqualTo(sessionPreAuth);
 	}
@@ -320,6 +330,39 @@ public class AbstractAuthenticationProcessingFilterTests {
 		verify(successHandler).onAuthenticationSuccess(any(HttpServletRequest.class), any(HttpServletResponse.class),
 				any(Authentication.class));
 		assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+		assertThat(request.getAttribute(RequestAttributeSecurityContextRepository.DEFAULT_REQUEST_ATTR_NAME))
+				.isNotNull();
+	}
+
+	@Test
+	public void testSuccessfulAuthenticationThenDefaultDoesNotCreateSession() throws Exception {
+		Authentication authentication = TestAuthentication.authenticatedUser();
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain chain = new MockFilterChain(false);
+		MockAuthenticationFilter filter = new MockAuthenticationFilter();
+
+		filter.successfulAuthentication(request, response, chain, authentication);
+
+		assertThat(request.getSession(false)).isNull();
+	}
+
+	@Test
+	public void testSuccessfulAuthenticationWhenCustomSecurityContextRepositoryThenAuthenticationSaved()
+			throws Exception {
+		ArgumentCaptor<SecurityContext> contextCaptor = ArgumentCaptor.forClass(SecurityContext.class);
+		SecurityContextRepository repository = mock(SecurityContextRepository.class);
+		Authentication authentication = TestAuthentication.authenticatedUser();
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain chain = new MockFilterChain(false);
+		MockAuthenticationFilter filter = new MockAuthenticationFilter();
+		filter.setSecurityContextRepository(repository);
+
+		filter.successfulAuthentication(request, response, chain, authentication);
+
+		verify(repository).saveContext(contextCaptor.capture(), eq(request), eq(response));
+		assertThat(contextCaptor.getValue().getAuthentication()).isEqualTo(authentication);
 	}
 
 	@Test
@@ -440,7 +483,7 @@ public class AbstractAuthenticationProcessingFilterTests {
 		public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response)
 				throws AuthenticationException {
 			if (this.grantAccess) {
-				return new UsernamePasswordAuthenticationToken("test", "test",
+				return UsernamePasswordAuthenticationToken.authenticated("test", "test",
 						AuthorityUtils.createAuthorityList("TEST"));
 			}
 			else {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,9 @@ import org.springframework.util.xml.DomUtils;
  * for use with a FilterSecurityInterceptor.
  *
  * @author Luke Taylor
+ * @deprecated Use `use-authorization-manager` property instead
  */
+@Deprecated
 public class FilterInvocationSecurityMetadataSourceParser implements BeanDefinitionParser {
 
 	private static final String ATT_USE_EXPRESSIONS = "use-expressions";
@@ -91,7 +93,7 @@ public class FilterInvocationSecurityMetadataSourceParser implements BeanDefinit
 
 	static RootBeanDefinition createSecurityMetadataSource(List<Element> interceptUrls, boolean addAllAuth,
 			Element httpElt, ParserContext pc) {
-		MatcherType matcherType = MatcherType.fromElement(httpElt);
+		MatcherType matcherType = MatcherType.fromElementOrMvc(httpElt);
 		boolean useExpressions = isUseExpressions(httpElt);
 		ManagedMap<BeanMetadataElement, BeanDefinition> requestToAttributesMap = parseInterceptUrlsForFilterInvocationRequestMap(
 				matcherType, interceptUrls, useExpressions, addAllAuth, pc);

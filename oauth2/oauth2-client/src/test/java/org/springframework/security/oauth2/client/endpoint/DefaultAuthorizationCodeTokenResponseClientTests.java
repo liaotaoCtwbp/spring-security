@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,7 +258,7 @@ public class DefaultAuthorizationCodeTokenResponseClientTests {
 						.getTokenResponse(authorizationCodeGrantRequest(this.clientRegistration.build())))
 				.withMessageContaining(
 						"[invalid_token_response] An error occurred while attempting to retrieve the OAuth 2.0 Access Token Response")
-				.withMessageContaining("tokenType cannot be null");
+				.havingRootCause().withMessageContaining("tokenType cannot be null");
 	}
 
 	@Test
@@ -274,7 +274,7 @@ public class DefaultAuthorizationCodeTokenResponseClientTests {
 						.getTokenResponse(authorizationCodeGrantRequest(this.clientRegistration.build())))
 				.withMessageContaining(
 						"[invalid_token_response] An error occurred while attempting to retrieve the OAuth 2.0 Access Token Response")
-				.withMessageContaining("tokenType cannot be null");
+				.havingRootCause().withMessageContaining("tokenType cannot be null");
 	}
 
 	@Test
@@ -295,7 +295,7 @@ public class DefaultAuthorizationCodeTokenResponseClientTests {
 	}
 
 	@Test
-	public void getTokenResponseWhenSuccessResponseDoesNotIncludeScopeThenAccessTokenHasDefaultScope() {
+	public void getTokenResponseWhenSuccessResponseDoesNotIncludeScopeThenAccessTokenHasNoScope() {
 		// @formatter:off
 		String accessTokenSuccessResponse = "{\n"
 			+ "   \"access_token\": \"access-token-1234\",\n"
@@ -307,7 +307,7 @@ public class DefaultAuthorizationCodeTokenResponseClientTests {
 		this.server.enqueue(jsonResponse(accessTokenSuccessResponse));
 		OAuth2AccessTokenResponse accessTokenResponse = this.tokenResponseClient
 				.getTokenResponse(authorizationCodeGrantRequest(this.clientRegistration.build()));
-		assertThat(accessTokenResponse.getAccessToken().getScopes()).containsExactly("read", "write");
+		assertThat(accessTokenResponse.getAccessToken().getScopes()).isEmpty();
 	}
 
 	@Test

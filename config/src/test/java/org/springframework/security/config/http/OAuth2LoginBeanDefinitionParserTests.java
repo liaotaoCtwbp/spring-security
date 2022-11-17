@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.annotation.RegisteredOAuth2AuthorizedClient;
@@ -63,6 +64,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoderFactory;
 import org.springframework.security.oauth2.jwt.TestJwts;
 import org.springframework.security.test.context.annotation.SecurityTestExecutionListeners;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.web.RedirectStrategy;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.savedrequest.RequestCache;
@@ -77,7 +79,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -117,6 +121,9 @@ public class OAuth2LoginBeanDefinitionParserTests {
 	private OAuth2AuthorizationRequestResolver authorizationRequestResolver;
 
 	@Autowired(required = false)
+	private RedirectStrategy authorizationRedirectStrategy;
+
+	@Autowired(required = false)
 	private OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> accessTokenResponseClient;
 
 	@Autowired(required = false)
@@ -136,6 +143,9 @@ public class OAuth2LoginBeanDefinitionParserTests {
 
 	@Autowired(required = false)
 	private RequestCache requestCache;
+
+	@Autowired(required = false)
+	private SecurityContextHolderStrategy securityContextHolderStrategy;
 
 	@Autowired
 	private MockMvc mvc;
@@ -373,6 +383,17 @@ public class OAuth2LoginBeanDefinitionParserTests {
 		verify(this.authorizationRequestResolver).resolve(any());
 	}
 
+	@Test
+	public void requestWhenCustomAuthorizationRedirectStrategyThenCalled() throws Exception {
+		this.spring.configLocations(this.xml("SingleClientRegistration-WithCustomAuthorizationRedirectStrategy"))
+				.autowire();
+		// @formatter:off
+		this.mvc.perform(get("/oauth2/authorization/google-login"))
+				.andExpect(status().isOk());
+		// @formatter:on
+		verify(this.authorizationRedirectStrategy).sendRedirect(any(), any(), anyString());
+	}
+
 	// gh-5347
 	@Test
 	public void requestWhenMultiClientRegistrationThenRedirectDefaultLoginPage() throws Exception {
@@ -470,6 +491,28 @@ public class OAuth2LoginBeanDefinitionParserTests {
 		params.add("state", authorizationRequest.getState());
 		this.mvc.perform(get("/login/oauth2/code/" + clientRegistration.getRegistrationId()).params(params));
 		verify(this.authorizedClientService).saveAuthorizedClient(any(), any());
+	}
+
+	@Test
+	public void requestWhenCustomSecurityContextHolderStrategyThenCalled() throws Exception {
+		this.spring.configLocations(this.xml("WithCustomSecurityContextHolderStrategy")).autowire();
+		ClientRegistration clientRegistration = TestClientRegistrations.clientRegistration().build();
+		given(this.clientRegistrationRepository.findByRegistrationId(any())).willReturn(clientRegistration);
+		Map<String, Object> attributes = new HashMap<>();
+		attributes.put(OAuth2ParameterNames.REGISTRATION_ID, clientRegistration.getRegistrationId());
+		OAuth2AuthorizationRequest authorizationRequest = TestOAuth2AuthorizationRequests.request()
+				.attributes(attributes).build();
+		given(this.authorizationRequestRepository.removeAuthorizationRequest(any(), any()))
+				.willReturn(authorizationRequest);
+		OAuth2AccessTokenResponse accessTokenResponse = TestOAuth2AccessTokenResponses.accessTokenResponse().build();
+		given(this.accessTokenResponseClient.getTokenResponse(any())).willReturn(accessTokenResponse);
+		OAuth2User oauth2User = TestOAuth2Users.create();
+		given(this.oauth2UserService.loadUser(any())).willReturn(oauth2User);
+		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+		params.add("code", "code123");
+		params.add("state", authorizationRequest.getState());
+		this.mvc.perform(get("/login/oauth2/code/" + clientRegistration.getRegistrationId()).params(params));
+		verify(this.securityContextHolderStrategy, atLeastOnce()).getContext();
 	}
 
 	@WithMockUser

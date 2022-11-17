@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ import org.springframework.web.util.UrlPathHelper;
  * @author Rob Winch
  * @author Eddú Meléndez
  * @author Evgeniy Cheban
+ * @author Manuel Jordan
  * @since 3.1
  * @see org.springframework.util.AntPathMatcher
  */
@@ -65,6 +66,43 @@ public final class AntPathRequestMatcher implements RequestMatcher, RequestVaria
 	private final boolean caseSensitive;
 
 	private final UrlPathHelper urlPathHelper;
+
+	/**
+	 * Creates a matcher with the specific pattern which will match all HTTP methods in a
+	 * case-sensitive manner.
+	 * @param pattern the ant pattern to use for matching
+	 * @since 5.8
+	 */
+	public static AntPathRequestMatcher antMatcher(String pattern) {
+		Assert.hasText(pattern, "pattern cannot be empty");
+		return new AntPathRequestMatcher(pattern);
+	}
+
+	/**
+	 * Creates a matcher that will match all request with the supplied HTTP method in a
+	 * case-sensitive manner.
+	 * @param method the HTTP method. The {@code matches} method will return false if the
+	 * incoming request doesn't have the same method.
+	 * @since 5.8
+	 */
+	public static AntPathRequestMatcher antMatcher(HttpMethod method) {
+		Assert.notNull(method, "method cannot be null");
+		return new AntPathRequestMatcher(MATCH_ALL, method.name());
+	}
+
+	/**
+	 * Creates a matcher with the supplied pattern and HTTP method in a case-sensitive
+	 * manner.
+	 * @param method the HTTP method. The {@code matches} method will return false if the
+	 * incoming request doesn't have the same method.
+	 * @param pattern the ant pattern to use for matching
+	 * @since 5.8
+	 */
+	public static AntPathRequestMatcher antMatcher(HttpMethod method, String pattern) {
+		Assert.notNull(method, "method cannot be null");
+		Assert.hasText(pattern, "pattern cannot be empty");
+		return new AntPathRequestMatcher(pattern, method.name());
+	}
 
 	/**
 	 * Creates a matcher with the specific pattern which will match all HTTP methods in a
@@ -142,7 +180,7 @@ public final class AntPathRequestMatcher implements RequestMatcher, RequestVaria
 	@Override
 	public boolean matches(HttpServletRequest request) {
 		if (this.httpMethod != null && StringUtils.hasText(request.getMethod())
-				&& this.httpMethod != HttpMethod.resolve(request.getMethod())) {
+				&& this.httpMethod != HttpMethod.valueOf(request.getMethod())) {
 			return false;
 		}
 		if (this.pattern.equals(MATCH_ALL)) {

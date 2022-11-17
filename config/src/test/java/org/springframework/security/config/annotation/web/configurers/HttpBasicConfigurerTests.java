@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,36 +18,45 @@ package org.springframework.security.config.annotation.web.configurers;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.ObjectPostProcessor;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.SecurityContextChangedListenerConfig;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextChangedListener;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.config.Customizer.withDefaults;
+import static org.springframework.security.config.annotation.SecurityContextChangedListenerArgumentMatchers.setAuthentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -118,16 +127,36 @@ public class HttpBasicConfigurerTests {
 		this.mvc.perform(rememberMeRequest).andExpect(cookie().exists("remember-me"));
 	}
 
+	@Test
+	public void httpBasicWhenDefaultsThenAcceptsBasicCredentials() throws Exception {
+		this.spring.register(HttpBasic.class, Users.class, Home.class).autowire();
+		this.mvc.perform(get("/").with(httpBasic("user", "password"))).andExpect(status().isOk())
+				.andExpect(content().string("user"));
+	}
+
+	@Test
+	public void httpBasicWhenCustomSecurityContextHolderStrategyThenUses() throws Exception {
+		this.spring.register(HttpBasic.class, Users.class, Home.class, SecurityContextChangedListenerConfig.class)
+				.autowire();
+		this.mvc.perform(get("/").with(httpBasic("user", "password"))).andExpect(status().isOk())
+				.andExpect(content().string("user"));
+		SecurityContextChangedListener listener = this.spring.getContext()
+				.getBean(SecurityContextChangedListener.class);
+		verify(listener).securityContextChanged(setAuthentication(UsernamePasswordAuthenticationToken.class));
+	}
+
+	@Configuration
 	@EnableWebSecurity
-	static class ObjectPostProcessorConfig extends WebSecurityConfigurerAdapter {
+	static class ObjectPostProcessorConfig {
 
 		static ObjectPostProcessor<Object> objectPostProcessor = spy(ReflectingObjectPostProcessor.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.httpBasic();
+			return http.build();
 			// @formatter:on
 		}
 
@@ -147,11 +176,12 @@ public class HttpBasicConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultsLambdaEntryPointConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultsLambdaEntryPointConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests((authorizeRequests) ->
@@ -160,23 +190,22 @@ public class HttpBasicConfigurerTests {
 				)
 				.httpBasic(withDefaults());
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication();
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager();
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultsEntryPointConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultsEntryPointConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -184,25 +213,24 @@ public class HttpBasicConfigurerTests {
 					.and()
 				.httpBasic();
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication();
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager();
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomAuthenticationEntryPointConfig extends WebSecurityConfigurerAdapter {
+	static class CustomAuthenticationEntryPointConfig {
 
 		static AuthenticationEntryPoint ENTRY_POINT = mock(AuthenticationEntryPoint.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -211,25 +239,24 @@ public class HttpBasicConfigurerTests {
 				.httpBasic()
 					.authenticationEntryPoint(ENTRY_POINT);
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication();
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager();
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DuplicateDoesNotOverrideConfig extends WebSecurityConfigurerAdapter {
+	static class DuplicateDoesNotOverrideConfig {
 
 		static AuthenticationEntryPoint ENTRY_POINT = mock(AuthenticationEntryPoint.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
@@ -240,35 +267,65 @@ public class HttpBasicConfigurerTests {
 					.and()
 				.httpBasic();
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication();
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager();
 		}
 
 	}
 
 	@EnableWebSecurity
 	@Configuration
-	static class BasicUsesRememberMeConfig extends WebSecurityConfigurerAdapter {
+	static class BasicUsesRememberMeConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.httpBasic()
 					.and()
 				.rememberMe();
+			return http.build();
 			// @formatter:on
 		}
 
-		@Override
 		@Bean
-		public UserDetailsService userDetailsService() {
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(
+			// @formatter:off
+					org.springframework.security.core.userdetails.User.withDefaultPasswordEncoder()
+							.username("user")
+							.password("password")
+							.roles("USER")
+							.build()
+					// @formatter:on
+			);
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	static class HttpBasic {
+
+		@Bean
+		SecurityFilterChain web(HttpSecurity http) throws Exception {
+			http.authorizeHttpRequests((authorize) -> authorize.anyRequest().authenticated())
+					.httpBasic(Customizer.withDefaults());
+
+			return http.build();
+		}
+
+	}
+
+	@Configuration
+	static class Users {
+
+		@Bean
+		UserDetailsService userDetailsService() {
 			return new InMemoryUserDetailsManager(
 			// @formatter:off
 					User.withDefaultPasswordEncoder()
@@ -278,6 +335,17 @@ public class HttpBasicConfigurerTests {
 							.build()
 					// @formatter:on
 			);
+		}
+
+	}
+
+	@EnableWebMvc
+	@RestController
+	static class Home {
+
+		@GetMapping("/")
+		String home(@AuthenticationPrincipal UserDetails user) {
+			return user.getUsername();
 		}
 
 	}

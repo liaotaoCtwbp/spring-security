@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,21 @@
 
 package org.springframework.security.config.annotation.method.configuration;
 
+import io.micrometer.observation.ObservationRegistry;
+import org.aopalliance.intercept.MethodInvocation;
+
 import org.springframework.aop.Advisor;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Role;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.method.AuthorizationManagerBeforeMethodInterceptor;
 import org.springframework.security.authorization.method.Jsr250AuthorizationManager;
 import org.springframework.security.config.core.GrantedAuthorityDefaults;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 
 /**
  * {@link Configuration} for enabling JSR-250 Spring Security Method Security.
@@ -38,17 +44,21 @@ import org.springframework.security.config.core.GrantedAuthorityDefaults;
 @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 final class Jsr250MethodSecurityConfiguration {
 
-	private final Jsr250AuthorizationManager jsr250AuthorizationManager = new Jsr250AuthorizationManager();
-
 	@Bean
 	@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
-	Advisor jsr250AuthorizationMethodInterceptor() {
-		return AuthorizationManagerBeforeMethodInterceptor.jsr250(this.jsr250AuthorizationManager);
-	}
-
-	@Autowired(required = false)
-	void setGrantedAuthorityDefaults(GrantedAuthorityDefaults grantedAuthorityDefaults) {
-		this.jsr250AuthorizationManager.setRolePrefix(grantedAuthorityDefaults.getRolePrefix());
+	static Advisor jsr250AuthorizationMethodInterceptor(ObjectProvider<GrantedAuthorityDefaults> defaultsProvider,
+			ObjectProvider<SecurityContextHolderStrategy> strategyProvider,
+			ObjectProvider<ObservationRegistry> registryProvider) {
+		Jsr250AuthorizationManager jsr250 = new Jsr250AuthorizationManager();
+		defaultsProvider.ifAvailable((d) -> jsr250.setRolePrefix(d.getRolePrefix()));
+		SecurityContextHolderStrategy strategy = strategyProvider
+				.getIfAvailable(SecurityContextHolder::getContextHolderStrategy);
+		AuthorizationManager<MethodInvocation> manager = new DeferringObservationAuthorizationManager<>(
+				registryProvider, jsr250);
+		AuthorizationManagerBeforeMethodInterceptor interceptor = AuthorizationManagerBeforeMethodInterceptor
+				.jsr250(manager);
+		interceptor.setSecurityContextHolderStrategy(strategy);
+		return interceptor;
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,8 @@ public class DefaultJwtBearerTokenResponseClientTests {
 		String accessTokenSuccessResponse = "{\n"
 				+ "   \"access_token\": \"access-token-1234\",\n"
 				+ "   \"token_type\": \"bearer\",\n"
-				+ "   \"expires_in\": \"3600\"\n"
+				+ "   \"expires_in\": \"3600\",\n"
+				+ "   \"scope\": \"read write\"\n"
 				+ "}\n";
 		// @formatter:on
 		this.server.enqueue(jsonResponse(accessTokenSuccessResponse));
@@ -182,7 +183,7 @@ public class DefaultJwtBearerTokenResponseClientTests {
 				.isThrownBy(() -> this.tokenResponseClient.getTokenResponse(jwtBearerGrantRequest))
 				.withMessageContaining(
 						"[invalid_token_response] An error occurred while attempting to retrieve the OAuth 2.0 Access Token Response")
-				.withMessageContaining("tokenType cannot be null");
+				.havingRootCause().withMessageContaining("tokenType cannot be null");
 	}
 
 	@Test
@@ -204,7 +205,7 @@ public class DefaultJwtBearerTokenResponseClientTests {
 	}
 
 	@Test
-	public void getTokenResponseWhenSuccessResponseDoesNotIncludeScopeThenAccessTokenHasDefaultScope() {
+	public void getTokenResponseWhenSuccessResponseDoesNotIncludeScopeThenAccessTokenHasNoScope() {
 		// @formatter:off
 		String accessTokenSuccessResponse = "{\n"
 				+ "   \"access_token\": \"access-token-1234\",\n"
@@ -217,7 +218,7 @@ public class DefaultJwtBearerTokenResponseClientTests {
 				this.jwtAssertion);
 		OAuth2AccessTokenResponse accessTokenResponse = this.tokenResponseClient
 				.getTokenResponse(jwtBearerGrantRequest);
-		assertThat(accessTokenResponse.getAccessToken().getScopes()).containsExactly("read", "write");
+		assertThat(accessTokenResponse.getAccessToken().getScopes()).isEmpty();
 	}
 
 	@Test

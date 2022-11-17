@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +33,8 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.oauth2.client.ClientAuthorizationRequiredException;
 import org.springframework.security.oauth2.client.ClientCredentialsOAuth2AuthorizedClientProvider;
 import org.springframework.security.oauth2.client.OAuth2AuthorizationContext;
@@ -43,7 +44,6 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProvider
 import org.springframework.security.oauth2.client.PasswordOAuth2AuthorizedClientProvider;
 import org.springframework.security.oauth2.client.annotation.RegisteredOAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.client.endpoint.DefaultClientCredentialsTokenResponseClient;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
 import org.springframework.security.oauth2.client.endpoint.OAuth2ClientCredentialsGrantRequest;
 import org.springframework.security.oauth2.client.endpoint.OAuth2PasswordGrantRequest;
@@ -65,11 +65,11 @@ import org.springframework.web.context.request.ServletWebRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -180,24 +180,6 @@ public class OAuth2AuthorizedClientArgumentResolverTests {
 	}
 
 	@Test
-	public void setClientCredentialsTokenResponseClientWhenClientIsNullThenThrowIllegalArgumentException() {
-		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.argumentResolver.setClientCredentialsTokenResponseClient(null))
-				.withMessage("clientCredentialsTokenResponseClient cannot be null");
-	}
-
-	@Test
-	public void setClientCredentialsTokenResponseClientWhenNotDefaultAuthorizedClientManagerThenThrowIllegalStateException() {
-		assertThatIllegalStateException()
-				.isThrownBy(() -> this.argumentResolver
-						.setClientCredentialsTokenResponseClient(new DefaultClientCredentialsTokenResponseClient()))
-				.withMessage("The client cannot be set when the constructor used is "
-						+ "\"OAuth2AuthorizedClientArgumentResolver(OAuth2AuthorizedClientManager)\". "
-						+ "Instead, use the constructor \"OAuth2AuthorizedClientArgumentResolver(ClientRegistrationRepository, "
-						+ "OAuth2AuthorizedClientRepository)\".");
-	}
-
-	@Test
 	public void supportsParameterWhenParameterTypeOAuth2AuthorizedClientThenTrue() {
 		MethodParameter methodParameter = this.getMethodParameter("paramTypeAuthorizedClient",
 				OAuth2AuthorizedClient.class);
@@ -252,6 +234,18 @@ public class OAuth2AuthorizedClientArgumentResolverTests {
 				OAuth2AuthorizedClient.class);
 		assertThat(this.argumentResolver.resolveArgument(methodParameter, null,
 				new ServletWebRequest(this.request, this.response), null)).isSameAs(this.authorizedClient1);
+	}
+
+	@Test
+	public void resolveArgumentWhenCustomSecurityContextHolderStrategyThenUses() throws Exception {
+		SecurityContextHolderStrategy strategy = mock(SecurityContextHolderStrategy.class);
+		given(strategy.getContext()).willReturn(new SecurityContextImpl(this.authentication));
+		this.argumentResolver.setSecurityContextHolderStrategy(strategy);
+		MethodParameter methodParameter = this.getMethodParameter("paramTypeAuthorizedClient",
+				OAuth2AuthorizedClient.class);
+		assertThat(this.argumentResolver.resolveArgument(methodParameter, null,
+				new ServletWebRequest(this.request, this.response), null)).isSameAs(this.authorizedClient1);
+		verify(strategy, atLeastOnce()).getContext();
 	}
 
 	@Test

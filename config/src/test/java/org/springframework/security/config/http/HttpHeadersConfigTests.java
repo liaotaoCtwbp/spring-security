@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ public class HttpHeadersConfigTests {
 			.put("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate")
 			.put("Expires", "0")
 			.put("Pragma", "no-cache")
-			.put("X-XSS-Protection", "1; mode=block")
+			.put("X-XSS-Protection", "0")
 			.build();
 	// @formatter:on
 
@@ -353,29 +353,16 @@ public class HttpHeadersConfigTests {
 		// @formatter:off
 		this.mvc.perform(get("/"))
 				.andExpect(status().isOk())
-				.andExpect(header().string("X-XSS-Protection", "1; mode=block"))
+				.andExpect(header().string("X-XSS-Protection", "0"))
 				.andExpect(excludes(excludedHeaders));
 		// @formatter:on
 	}
 
 	@Test
-	public void requestWhenEnablingXssProtectionThenDefaultsToModeBlock() throws Exception {
+	public void requestWhenSettingXssProtectionHeaderValueToZeroThenDefaultsToZero() throws Exception {
 		Set<String> excludedHeaders = new HashSet<>(defaultHeaders.keySet());
 		excludedHeaders.remove("X-XSS-Protection");
-		this.spring.configLocations(this.xml("DefaultsDisabledWithXssProtectionEnabled")).autowire();
-		// @formatter:off
-		this.mvc.perform(get("/"))
-				.andExpect(status().isOk())
-				.andExpect(header().string("X-XSS-Protection", "1; mode=block"))
-				.andExpect(excludes(excludedHeaders));
-		// @formatter:on
-	}
-
-	@Test
-	public void requestWhenDisablingXssProtectionThenDefaultsToZero() throws Exception {
-		Set<String> excludedHeaders = new HashSet<>(defaultHeaders.keySet());
-		excludedHeaders.remove("X-XSS-Protection");
-		this.spring.configLocations(this.xml("DefaultsDisabledWithXssProtectionDisabled")).autowire();
+		this.spring.configLocations(this.xml("DefaultsDisabledWithXssProtectionHeaderValueZero")).autowire();
 		// @formatter:off
 		this.mvc.perform(get("/"))
 				.andExpect(status().isOk())
@@ -385,11 +372,29 @@ public class HttpHeadersConfigTests {
 	}
 
 	@Test
-	public void configureWhenXssProtectionDisabledAndBlockSetThenAutowireFails() {
-		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring
-						.configLocations(this.xml("DefaultsDisabledWithXssProtectionDisabledAndBlockSet")).autowire())
-				.withMessageContaining("Cannot set block to true with enabled false");
+	public void requestWhenSettingXssProtectionHeaderValueToOneThenDefaultsToOne() throws Exception {
+		Set<String> excludedHeaders = new HashSet<>(defaultHeaders.keySet());
+		excludedHeaders.remove("X-XSS-Protection");
+		this.spring.configLocations(this.xml("DefaultsDisabledWithXssProtectionHeaderValueOne")).autowire();
+		// @formatter:off
+		this.mvc.perform(get("/"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-XSS-Protection", "1"))
+				.andExpect(excludes(excludedHeaders));
+		// @formatter:on
+	}
+
+	@Test
+	public void requestWhenSettingXssProtectionHeaderValueToOneModeBlockThenDefaultsToOneModeBlock() throws Exception {
+		Set<String> excludedHeaders = new HashSet<>(defaultHeaders.keySet());
+		excludedHeaders.remove("X-XSS-Protection");
+		this.spring.configLocations(this.xml("DefaultsDisabledWithXssProtectionHeaderValueOneModeBlock")).autowire();
+		// @formatter:off
+		this.mvc.perform(get("/"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-XSS-Protection", "1; mode=block"))
+				.andExpect(excludes(excludedHeaders));
+		// @formatter:on
 	}
 
 	@Test
@@ -445,14 +450,14 @@ public class HttpHeadersConfigTests {
 	public void configureWhenUsingHpkpWithoutPinsThenAutowireFails() {
 		assertThatExceptionOfType(XmlBeanDefinitionStoreException.class)
 				.isThrownBy(() -> this.spring.configLocations(this.xml("DefaultsDisabledWithEmptyHpkp")).autowire())
-				.withMessageContaining("The content of element 'hpkp' is not complete");
+				.havingRootCause().withMessageContaining("The content of element 'hpkp' is not complete");
 	}
 
 	@Test
 	public void configureWhenUsingHpkpWithEmptyPinsThenAutowireFails() {
 		assertThatExceptionOfType(XmlBeanDefinitionStoreException.class)
 				.isThrownBy(() -> this.spring.configLocations(this.xml("DefaultsDisabledWithEmptyPins")).autowire())
-				.withMessageContaining("The content of element 'pins' is not complete");
+				.havingRootCause().withMessageContaining("The content of element 'pins' is not complete");
 	}
 
 	@Test
@@ -636,18 +641,10 @@ public class HttpHeadersConfigTests {
 	}
 
 	@Test
-	public void configureWhenXssProtectionDisabledAndEnabledThenAutowireFails() {
-		assertThatExceptionOfType(BeanDefinitionParsingException.class)
-				.isThrownBy(() -> this.spring.configLocations(this.xml("XssProtectionDisabledAndEnabled")).autowire())
-				.withMessageContaining("enabled");
-	}
-
-	@Test
-	public void configureWhenXssProtectionDisabledAndBlockSpecifiedThenAutowireFails() {
-		assertThatExceptionOfType(BeanDefinitionParsingException.class)
-				.isThrownBy(
-						() -> this.spring.configLocations(this.xml("XssProtectionDisabledSpecifyingBlock")).autowire())
-				.withMessageContaining("block");
+	public void configureWhenXssProtectionDisabledAndHeaderValueSpecifiedThenAutowireFails() {
+		assertThatExceptionOfType(BeanDefinitionParsingException.class).isThrownBy(
+				() -> this.spring.configLocations(this.xml("XssProtectionDisabledSpecifyingHeaderValue")).autowire())
+				.withMessageContaining("header-value");
 	}
 
 	@Test

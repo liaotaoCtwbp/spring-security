@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import java.util.List;
 import jakarta.servlet.Filter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.eclipse.jetty.http.HttpStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,11 +35,13 @@ import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.test.context.annotation.SecurityTestExecutionListeners;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.test.web.servlet.RequestCacheResultMatcher;
 import org.springframework.security.test.web.support.WebTestUtils;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.stereotype.Controller;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
@@ -292,6 +293,50 @@ public class CsrfConfigTests {
 	}
 
 	@Test
+	public void getWhenUsingCsrfAndCustomRequestAttributeThenSetUsingCsrfAttrName() throws Exception {
+		this.spring.configLocations(this.xml("WithRequestAttrName")).autowire();
+		// @formatter:off
+		MvcResult result = this.mvc.perform(get("/ok")).andReturn();
+		assertThat(result.getRequest().getAttribute("csrf-attribute-name")).isInstanceOf(CsrfToken.class);
+		// @formatter:on
+	}
+
+	@Test
+	public void postWhenUsingCsrfAndXorCsrfTokenRequestAttributeHandlerThenOk() throws Exception {
+		this.spring.configLocations(this.xml("WithXorCsrfTokenRequestAttributeHandler"), this.xml("shared-controllers"))
+				.autowire();
+		// @formatter:off
+		MvcResult mvcResult = this.mvc.perform(get("/ok"))
+				.andExpect(status().isOk())
+				.andReturn();
+		MockHttpSession session = (MockHttpSession) mvcResult.getRequest().getSession();
+		MockHttpServletRequestBuilder ok = post("/ok")
+				.with(csrf())
+				.session(session);
+		this.mvc.perform(ok).andExpect(status().isOk());
+		// @formatter:on
+	}
+
+	@Test
+	public void postWhenUsingCsrfAndXorCsrfTokenRequestAttributeHandlerWithRawTokenThenForbidden() throws Exception {
+		this.spring.configLocations(this.xml("WithXorCsrfTokenRequestAttributeHandler"), this.xml("shared-controllers"))
+				.autowire();
+		// @formatter:off
+		MvcResult mvcResult = this.mvc.perform(get("/csrf"))
+				.andExpect(status().isOk())
+				.andReturn();
+		MockHttpServletRequest request = mvcResult.getRequest();
+		MockHttpSession session = (MockHttpSession) request.getSession();
+		CsrfTokenRepository repository = WebTestUtils.getCsrfTokenRepository(request);
+		CsrfToken csrfToken = repository.loadToken(request);
+		MockHttpServletRequestBuilder ok = post("/ok")
+				.header(csrfToken.getHeaderName(), csrfToken.getToken())
+				.session(session);
+		this.mvc.perform(ok).andExpect(status().isForbidden());
+		// @formatter:on
+	}
+
+	@Test
 	public void postWhenHasCsrfTokenButSessionExpiresThenRequestIsCancelledAfterSuccessfulAuthentication()
 			throws Exception {
 		this.spring.configLocations(this.xml("CsrfEnabled")).autowire();
@@ -329,7 +374,7 @@ public class CsrfConfigTests {
 				.session(session)
 				.with(csrf());
 		this.mvc.perform(login)
-				.andExpect(redirectedUrl("http://localhost/authenticated"));
+				.andExpect(RequestCacheResultMatcher.redirectToCachedRequest());
 		// @formatter:on
 	}
 
@@ -552,7 +597,7 @@ public class CsrfConfigTests {
 		@Override
 		public void match(MvcResult result) throws Exception {
 			MockHttpServletRequest request = result.getRequest();
-			CsrfToken token = WebTestUtils.getCsrfTokenRepository(request).loadToken(request);
+			CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
 			assertThat(token).isNotNull();
 			assertThat(token.getToken()).isEqualTo(this.token.apply(result));
 		}

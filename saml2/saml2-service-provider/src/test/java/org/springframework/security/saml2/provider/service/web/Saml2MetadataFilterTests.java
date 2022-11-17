@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 import jakarta.servlet.FilterChain;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -106,7 +105,7 @@ public class Saml2MetadataFilterTests {
 				.build();
 		String generatedMetadata = "<xml>test</xml>";
 		given(this.resolver.resolve(validRegistration)).willReturn(generatedMetadata);
-		this.filter = new Saml2MetadataFilter((request) -> validRegistration, this.resolver);
+		this.filter = new Saml2MetadataFilter((request, registrationId) -> validRegistration, this.resolver);
 		this.filter.doFilter(this.request, this.response, this.chain);
 		verifyNoInteractions(this.chain);
 		assertThat(this.response.getStatus()).isEqualTo(200);
@@ -132,7 +131,7 @@ public class Saml2MetadataFilterTests {
 		String generatedMetadata = "<xml>test</xml>";
 		this.request.setPathInfo("/saml2/service-provider-metadata/registration-id");
 		given(this.resolver.resolve(validRegistration)).willReturn(generatedMetadata);
-		this.filter = new Saml2MetadataFilter((request) -> validRegistration, this.resolver);
+		this.filter = new Saml2MetadataFilter((request, registrationId) -> validRegistration, this.resolver);
 		this.filter.setMetadataFilename(testMetadataFilename);
 		this.filter.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getHeaderValue(HttpHeaders.CONTENT_DISPOSITION)).asString()
@@ -151,6 +150,21 @@ public class Saml2MetadataFilterTests {
 		this.request.setPathInfo("/metadata");
 		this.filter.doFilter(this.request, this.response, new MockFilterChain());
 		verify(this.repository).findByRegistrationId("registration-id");
+	}
+
+	// gh-12026
+	@Test
+	public void doFilterWhenCharacterEncodingThenEncodeSpecialCharactersCorrectly() throws Exception {
+		RelyingPartyRegistration validRegistration = TestRelyingPartyRegistrations.full().build();
+		String testMetadataFilename = "test-{registrationId}-metadata.xml";
+		String generatedMetadata = "<xml>testäöü</xml>";
+		this.request.setPathInfo("/saml2/service-provider-metadata/registration-id");
+		given(this.resolver.resolve(validRegistration)).willReturn(generatedMetadata);
+		this.filter = new Saml2MetadataFilter((req, id) -> validRegistration, this.resolver);
+		this.filter.setMetadataFilename(testMetadataFilename);
+		this.filter.doFilter(this.request, this.response, this.chain);
+		assertThat(this.response.getCharacterEncoding()).isEqualTo(StandardCharsets.UTF_8.name());
+		assertThat(this.response.getContentAsString(StandardCharsets.UTF_8)).isEqualTo(generatedMetadata);
 	}
 
 	@Test

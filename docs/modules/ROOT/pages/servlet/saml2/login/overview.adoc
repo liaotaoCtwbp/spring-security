@@ -154,14 +154,6 @@ Instead, such classes as `OpenSamlAuthenticationRequestFactory` and `OpenSamlAut
 
 For example, once your application receives a `SAMLResponse` and delegates to `Saml2WebSsoAuthenticationFilter`, the filter delegates to `OpenSamlAuthenticationProvider`:
 
-[NOTE]
-====
-For backward compatibility, Spring Security will use the latest OpenSAML 3 by default.
-Note, though that OpenSAML 3 has reached it's end-of-life and updating to OpenSAML 4.x is recommended.
-For that reason, Spring Security supports both OpenSAML 3.x and 4.x.
-If you manage your OpenSAML dependency to 4.x, then Spring Security will select its OpenSAML 4.x implementations.
-====
-
 .Authenticating an OpenSAML `Response`
 image:{figures}/opensamlauthenticationprovider.png[]
 
@@ -297,38 +289,42 @@ The `requireInitialize` method may be called only once per application instance.
 
 Spring Boot generates two `@Bean` objects for a relying party.
 
-The first is a `WebSecurityConfigurerAdapter` that configures the application as a relying party.
-When including `spring-security-saml2-service-provider`, the `WebSecurityConfigurerAdapter` looks like:
+The first is a `SecurityFilterChain` that configures the application as a relying party.
+When including `spring-security-saml2-service-provider`, the `SecurityFilterChain` looks like:
 
 .Default JWT Configuration
 ====
 .Java
 [source,java,role="primary"]
 ----
-protected void configure(HttpSecurity http) {
+@Bean
+public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
         .authorizeHttpRequests(authorize -> authorize
             .anyRequest().authenticated()
         )
         .saml2Login(withDefaults());
+    return http.build();
 }
 ----
 
 .Kotlin
 [source,kotlin,role="secondary"]
 ----
-fun configure(http: HttpSecurity) {
+@Bean
+open fun filterChain(http: HttpSecurity): SecurityFilterChain {
     http {
         authorizeRequests {
             authorize(anyRequest, authenticated)
         }
         saml2Login { }
     }
+    return http.build()
 }
 ----
 ====
 
-If the application does not expose a `WebSecurityConfigurerAdapter` bean, Spring Boot exposes the preceding default one.
+If the application does not expose a `SecurityFilterChain` bean, Spring Boot exposes the preceding default one.
 
 You can replace this by exposing the bean within the application:
 
@@ -337,15 +333,18 @@ You can replace this by exposing the bean within the application:
 .Java
 [source,java,role="primary"]
 ----
+@Configuration
 @EnableWebSecurity
-public class MyCustomSecurityConfiguration extends WebSecurityConfigurerAdapter {
-    protected void configure(HttpSecurity http) {
+public class MyCustomSecurityConfiguration {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authorize -> authorize
-                .mvcMatchers("/messages/**").hasAuthority("ROLE_USER")
+                .requestMatchers("/messages/**").hasAuthority("ROLE_USER")
                 .anyRequest().authenticated()
             )
             .saml2Login(withDefaults());
+        return http.build();
     }
 }
 ----
@@ -353,9 +352,11 @@ public class MyCustomSecurityConfiguration extends WebSecurityConfigurerAdapter 
 .Kotlin
 [source,kotlin,role="secondary"]
 ----
+@Configuration
 @EnableWebSecurity
-class MyCustomSecurityConfiguration : WebSecurityConfigurerAdapter() {
-    override fun configure(http: HttpSecurity) {
+class MyCustomSecurityConfiguration {
+    @Bean
+    open fun filterChain(http: HttpSecurity): SecurityFilterChain {
         http {
             authorizeRequests {
                 authorize("/messages/**", hasAuthority("ROLE_USER"))
@@ -364,6 +365,7 @@ class MyCustomSecurityConfiguration : WebSecurityConfigurerAdapter() {
             saml2Login {
             }
         }
+        return http.build()
     }
 }
 ----
@@ -480,24 +482,27 @@ open fun relyingPartyRegistrations(): RelyingPartyRegistrationRepository {
 
 [[servlet-saml2login-relyingpartyregistrationrepository-dsl]]
 
-Alternatively, you can directly wire up the repository by using the DSL, which also overrides the auto-configured `WebSecurityConfigurerAdapter`:
+Alternatively, you can directly wire up the repository by using the DSL, which also overrides the auto-configured `SecurityFilterChain`:
 
 .Custom Relying Party Registration DSL
 ====
 .Java
 [source,java,role="primary"]
 ----
+@Configuration
 @EnableWebSecurity
-public class MyCustomSecurityConfiguration extends WebSecurityConfigurerAdapter {
-    protected void configure(HttpSecurity http) {
+public class MyCustomSecurityConfiguration {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authorize -> authorize
-                .mvcMatchers("/messages/**").hasAuthority("ROLE_USER")
+                .requestMatchers("/messages/**").hasAuthority("ROLE_USER")
                 .anyRequest().authenticated()
             )
             .saml2Login(saml2 -> saml2
                 .relyingPartyRegistrationRepository(relyingPartyRegistrations())
             );
+        return http.build();
     }
 }
 ----
@@ -505,9 +510,11 @@ public class MyCustomSecurityConfiguration extends WebSecurityConfigurerAdapter 
 .Kotlin
 [source,kotlin,role="secondary"]
 ----
+@Configuration
 @EnableWebSecurity
-class MyCustomSecurityConfiguration : WebSecurityConfigurerAdapter() {
-    override fun configure(http: HttpSecurity) {
+class MyCustomSecurityConfiguration {
+    @Bean
+    open fun filterChain(http: HttpSecurity): SecurityFilterChain {
         http {
             authorizeRequests {
                 authorize("/messages/**", hasAuthority("ROLE_USER"))
@@ -517,6 +524,7 @@ class MyCustomSecurityConfiguration : WebSecurityConfigurerAdapter() {
                 relyingPartyRegistrationRepository = relyingPartyRegistrations()
             }
         }
+        return http.build()
     }
 }
 ----

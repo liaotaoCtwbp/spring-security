@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,28 +16,38 @@
 
 package org.springframework.security.config.annotation.web.builders;
 
-import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockServletContext;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.core.userdetails.PasswordEncodedUser;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.HttpStatusRequestRejectedHandler;
+import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -93,6 +103,15 @@ public class WebSecurityTests {
 	}
 
 	@Test
+	public void requestRejectedHandlerInvoked() throws ServletException, IOException {
+		loadConfig(RequestRejectedHandlerConfig.class);
+		this.request.setServletPath("/spring");
+		this.request.setRequestURI("/spring/\u0019path");
+		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
+		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_BAD_REQUEST);
+	}
+
+	@Test
 	public void ignoringMvcMatcherServletPath() throws Exception {
 		loadConfig(MvcMatcherServletPathConfig.class, LegacyMvcMatchingConfig.class);
 		this.request.setServletPath("/spring");
@@ -127,33 +146,27 @@ public class WebSecurityTests {
 	@EnableWebSecurity
 	@Configuration
 	@EnableWebMvc
-	static class MvcMatcherConfig extends WebSecurityConfigurerAdapter {
+	static class MvcMatcherConfig {
 
-		@Override
-		public void configure(WebSecurity web) {
-			// @formatter:off
-			web
-				.ignoring()
-					.mvcMatchers("/path");
-			// @formatter:on
+		@Bean
+		WebSecurityCustomizer webSecurityCustomizer(HandlerMappingIntrospector introspector) {
+			return (web) -> web.ignoring().requestMatchers(new MvcRequestMatcher(introspector, "/path"));
 		}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.httpBasic().and()
 				.authorizeRequests()
 					.anyRequest().denyAll();
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication();
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user());
 		}
 
 		@RestController
@@ -171,34 +184,28 @@ public class WebSecurityTests {
 	@EnableWebSecurity
 	@Configuration
 	@EnableWebMvc
-	static class MvcMatcherServletPathConfig extends WebSecurityConfigurerAdapter {
+	static class MvcMatcherServletPathConfig {
 
-		@Override
-		public void configure(WebSecurity web) {
-			// @formatter:off
-			web
-				.ignoring()
-					.mvcMatchers("/path").servletPath("/spring")
-					.mvcMatchers("/notused");
-			// @formatter:on
+		@Bean
+		WebSecurityCustomizer webSecurityCustomizer(HandlerMappingIntrospector introspector) {
+			MvcRequestMatcher.Builder builder = new MvcRequestMatcher.Builder(introspector).servletPath("/spring");
+			return (web) -> web.ignoring().requestMatchers(builder.pattern("/path")).requestMatchers("/notused");
 		}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.httpBasic().and()
 				.authorizeRequests()
 					.anyRequest().denyAll();
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication();
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user());
 		}
 
 		@RestController
@@ -219,6 +226,19 @@ public class WebSecurityTests {
 		@Override
 		public void configurePathMatch(PathMatchConfigurer configurer) {
 			configurer.setUseSuffixPatternMatch(true);
+			configurer.setUseTrailingSlashMatch(true);
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	static class RequestRejectedHandlerConfig {
+
+		@Bean
+		WebSecurityCustomizer webSecurityCustomizer() {
+			return (web) -> web
+					.requestRejectedHandler(new HttpStatusRequestRejectedHandler(HttpStatus.BAD_REQUEST.value()));
 		}
 
 	}

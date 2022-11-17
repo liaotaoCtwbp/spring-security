@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.HeaderWriterFilter;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -55,14 +57,15 @@ public class HeadersConfigurerEagerHeadersTests {
 				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, max-age=0, must-revalidate"))
 				.andExpect(header().string(HttpHeaders.EXPIRES, "0"))
 				.andExpect(header().string(HttpHeaders.PRAGMA, "no-cache"))
-				.andExpect(header().string("X-XSS-Protection", "1; mode=block"));
+				.andExpect(header().string("X-XSS-Protection", "0"));
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	public static class HeadersAtTheBeginningOfRequestConfig extends WebSecurityConfigurerAdapter {
+	public static class HeadersAtTheBeginningOfRequestConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
@@ -73,6 +76,7 @@ public class HeadersConfigurerEagerHeadersTests {
 							return filter;
 						}
 					});
+			return http.build();
 			// @formatter:on
 		}
 

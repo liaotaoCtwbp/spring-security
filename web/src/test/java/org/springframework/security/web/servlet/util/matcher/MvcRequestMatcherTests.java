@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 import org.springframework.web.servlet.handler.MatchableHandlerMapping;
@@ -36,7 +37,7 @@ import org.springframework.web.servlet.handler.RequestMatchResult;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * @author Rob Winch
@@ -161,7 +162,7 @@ public class MvcRequestMatcherTests {
 		this.matcher.setMethod(HttpMethod.POST);
 		assertThat(this.matcher.matches(this.request)).isFalse();
 		// method compare should be done first since faster
-		verifyZeroInteractions(this.introspector);
+		verifyNoMoreInteractions(this.introspector);
 	}
 
 	/**
@@ -175,7 +176,7 @@ public class MvcRequestMatcherTests {
 		this.request.setMethod("invalid");
 		assertThat(this.matcher.matches(this.request)).isFalse();
 		// method compare should be done first since faster
-		verifyZeroInteractions(this.introspector);
+		verifyNoMoreInteractions(this.introspector);
 	}
 
 	@Test
@@ -243,6 +244,32 @@ public class MvcRequestMatcherTests {
 	public void matcherWhenServletPathMatchesThenMatchResult() {
 		this.matcher.setServletPath("/path");
 		assertThat(this.matcher.matcher(this.request).isMatch()).isTrue();
+	}
+
+	@Test
+	public void builderWhenServletPathThenServletPathPresent() {
+		MvcRequestMatcher matcher = new MvcRequestMatcher.Builder(this.introspector).servletPath("/path")
+				.pattern("/endpoint");
+		assertThat(matcher.getServletPath()).isEqualTo("/path");
+		assertThat(ReflectionTestUtils.getField(matcher, "pattern")).isEqualTo("/endpoint");
+		assertThat(ReflectionTestUtils.getField(matcher, "method")).isNull();
+	}
+
+	@Test
+	public void builderWhenPatternThenPatternPresent() {
+		MvcRequestMatcher matcher = new MvcRequestMatcher.Builder(this.introspector).pattern("/endpoint");
+		assertThat(matcher.getServletPath()).isNull();
+		assertThat(ReflectionTestUtils.getField(matcher, "pattern")).isEqualTo("/endpoint");
+		assertThat(ReflectionTestUtils.getField(matcher, "method")).isNull();
+	}
+
+	@Test
+	public void builderWhenMethodAndPatternThenMethodAndPatternPresent() {
+		MvcRequestMatcher matcher = new MvcRequestMatcher.Builder(this.introspector).pattern(HttpMethod.GET,
+				"/endpoint");
+		assertThat(matcher.getServletPath()).isNull();
+		assertThat(ReflectionTestUtils.getField(matcher, "pattern")).isEqualTo("/endpoint");
+		assertThat(ReflectionTestUtils.getField(matcher, "method")).isEqualTo(HttpMethod.GET);
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.saml2.core.Saml2Error;
 import org.springframework.security.saml2.core.Saml2ParameterNames;
 import org.springframework.security.saml2.provider.service.authentication.logout.Saml2LogoutRequestValidator;
@@ -47,6 +49,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * Tests for {@link Saml2LogoutRequestFilter}
  */
 public class Saml2LogoutRequestFilterTests {
+
+	SecurityContextHolderStrategy securityContextHolderStrategy = mock(SecurityContextHolderStrategy.class);
 
 	RelyingPartyRegistrationResolver relyingPartyRegistrationResolver = mock(RelyingPartyRegistrationResolver.class);
 
@@ -94,6 +98,8 @@ public class Saml2LogoutRequestFilterTests {
 		RelyingPartyRegistration registration = TestRelyingPartyRegistrations.full()
 				.assertingPartyDetails((party) -> party.singleLogoutServiceBinding(Saml2MessageBinding.POST)).build();
 		Authentication authentication = new TestingAuthenticationToken("user", "password");
+		given(this.securityContextHolderStrategy.getContext()).willReturn(new SecurityContextImpl(authentication));
+		this.logoutRequestProcessingFilter.setSecurityContextHolderStrategy(this.securityContextHolderStrategy);
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/logout/saml2/slo");
 		request.setServletPath("/logout/saml2/slo");
@@ -111,6 +117,10 @@ public class Saml2LogoutRequestFilterTests {
 		String content = response.getContentAsString();
 		assertThat(content).contains(Saml2ParameterNames.SAML_RESPONSE);
 		assertThat(content).contains(registration.getAssertingPartyDetails().getSingleLogoutServiceResponseLocation());
+		assertThat(content).contains(
+				"<meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'sha256-t+jmhLjs1ocvgaHBJsFcgznRk68d37TLtbI3NE9h7EU='\">");
+		assertThat(content).contains("<script>window.onload = () => document.forms[0].submit();</script>");
+		verify(this.securityContextHolderStrategy).getContext();
 	}
 
 	@Test
@@ -149,6 +159,22 @@ public class Saml2LogoutRequestFilterTests {
 		given(this.logoutRequestValidator.validate(any()))
 				.willReturn(Saml2LogoutValidatorResult.withErrors(new Saml2Error("error", "description")).build());
 		this.logoutRequestProcessingFilter.doFilter(request, response, new MockFilterChain());
+		assertThat(response.getStatus()).isEqualTo(401);
+		verifyNoInteractions(this.logoutHandler);
+	}
+
+	@Test
+	public void doFilterWhenNoRelyingPartyLogoutThen401() throws Exception {
+		Authentication authentication = new TestingAuthenticationToken("user", "password");
+		SecurityContextHolder.getContext().setAuthentication(authentication);
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/logout/saml2/slo");
+		request.setServletPath("/logout/saml2/slo");
+		request.setParameter(Saml2ParameterNames.SAML_REQUEST, "request");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		RelyingPartyRegistration registration = TestRelyingPartyRegistrations.full().singleLogoutServiceLocation(null)
+				.build();
+		given(this.relyingPartyRegistrationResolver.resolve(any(), any())).willReturn(registration);
+		this.logoutRequestProcessingFilter.doFilterInternal(request, response, new MockFilterChain());
 		assertThat(response.getStatus()).isEqualTo(401);
 		verifyNoInteractions(this.logoutHandler);
 	}

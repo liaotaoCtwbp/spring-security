@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ class SessionManagementDsl {
     var sessionAuthenticationErrorUrl: String? = null
     var sessionAuthenticationFailureHandler: AuthenticationFailureHandler? = null
     var enableSessionUrlRewriting: Boolean? = null
+    var requireExplicitAuthenticationStrategy: Boolean? = null
     var sessionCreationPolicy: SessionCreationPolicy? = null
     var sessionAuthenticationStrategy: SessionAuthenticationStrategy? = null
     private var sessionFixation: ((SessionManagementConfigurer<HttpSecurity>.SessionFixationConfigurer) -> Unit)? = null
@@ -50,16 +51,19 @@ class SessionManagementDsl {
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      httpSecurity(http) {
-     *          sessionManagement {
-     *              sessionFixation { }
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             sessionManagement {
+     *                 sessionFixation { }
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -77,19 +81,22 @@ class SessionManagementDsl {
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebSecurity
-     * class SecurityConfig : WebSecurityConfigurerAdapter() {
+     * class SecurityConfig {
      *
-     *  override fun configure(http: HttpSecurity) {
-     *      httpSecurity(http) {
-     *          sessionManagement {
-     *              sessionConcurrency {
-     *                  maximumSessions = 1
-     *                  maxSessionsPreventsLogin = true
-     *              }
-     *          }
-     *      }
-     *  }
+     *     @Bean
+     *     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+     *         http {
+     *             sessionManagement {
+     *                 sessionConcurrency {
+     *                     maximumSessions = 1
+     *                     maxSessionsPreventsLogin = true
+     *                 }
+     *             }
+     *         }
+     *         return http.build()
+     *     }
      * }
      * ```
      *
@@ -104,6 +111,7 @@ class SessionManagementDsl {
     internal fun get(): (SessionManagementConfigurer<HttpSecurity>) -> Unit {
         return { sessionManagement ->
             invalidSessionUrl?.also { sessionManagement.invalidSessionUrl(invalidSessionUrl) }
+            requireExplicitAuthenticationStrategy?.also { sessionManagement.requireExplicitAuthenticationStrategy(requireExplicitAuthenticationStrategy!!) }
             invalidSessionStrategy?.also { sessionManagement.invalidSessionStrategy(invalidSessionStrategy) }
             sessionAuthenticationErrorUrl?.also { sessionManagement.sessionAuthenticationErrorUrl(sessionAuthenticationErrorUrl) }
             sessionAuthenticationFailureHandler?.also { sessionManagement.sessionAuthenticationFailureHandler(sessionAuthenticationFailureHandler) }

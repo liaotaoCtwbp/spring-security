@@ -26,11 +26,14 @@ import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.security.config.BeanIds;
 import org.springframework.security.web.context.AbstractSecurityWebApplicationInitializer;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.WebApplicationContextUtils;
@@ -47,6 +50,8 @@ public abstract class WebTestUtils {
 
 	private static final CsrfTokenRepository DEFAULT_TOKEN_REPO = new HttpSessionCsrfTokenRepository();
 
+	private static final CsrfTokenRequestHandler DEFAULT_CSRF_HANDLER = new XorCsrfTokenRequestAttributeHandler();
+
 	private WebTestUtils() {
 	}
 
@@ -61,10 +66,14 @@ public abstract class WebTestUtils {
 	 */
 	public static SecurityContextRepository getSecurityContextRepository(HttpServletRequest request) {
 		SecurityContextPersistenceFilter filter = findFilter(request, SecurityContextPersistenceFilter.class);
-		if (filter == null) {
-			return DEFAULT_CONTEXT_REPO;
+		if (filter != null) {
+			return (SecurityContextRepository) ReflectionTestUtils.getField(filter, "repo");
 		}
-		return (SecurityContextRepository) ReflectionTestUtils.getField(filter, "repo");
+		SecurityContextHolderFilter holderFilter = findFilter(request, SecurityContextHolderFilter.class);
+		if (holderFilter != null) {
+			return (SecurityContextRepository) ReflectionTestUtils.getField(holderFilter, "securityContextRepository");
+		}
+		return DEFAULT_CONTEXT_REPO;
 	}
 
 	/**
@@ -79,6 +88,10 @@ public abstract class WebTestUtils {
 		SecurityContextPersistenceFilter filter = findFilter(request, SecurityContextPersistenceFilter.class);
 		if (filter != null) {
 			ReflectionTestUtils.setField(filter, "repo", securityContextRepository);
+		}
+		SecurityContextHolderFilter holderFilter = findFilter(request, SecurityContextHolderFilter.class);
+		if (holderFilter != null) {
+			ReflectionTestUtils.setField(holderFilter, "securityContextRepository", securityContextRepository);
 		}
 	}
 
@@ -96,6 +109,23 @@ public abstract class WebTestUtils {
 			return DEFAULT_TOKEN_REPO;
 		}
 		return (CsrfTokenRepository) ReflectionTestUtils.getField(filter, "tokenRepository");
+	}
+
+	/**
+	 * Gets the {@link CsrfTokenRequestHandler} for the specified
+	 * {@link HttpServletRequest}. If one is not found, the default
+	 * {@link XorCsrfTokenRequestAttributeHandler} is used.
+	 * @param request the {@link HttpServletRequest} to obtain the
+	 * {@link CsrfTokenRequestHandler}
+	 * @return the {@link CsrfTokenRequestHandler} for the specified
+	 * {@link HttpServletRequest}
+	 */
+	public static CsrfTokenRequestHandler getCsrfTokenRequestHandler(HttpServletRequest request) {
+		CsrfFilter filter = findFilter(request, CsrfFilter.class);
+		if (filter == null) {
+			return DEFAULT_CSRF_HANDLER;
+		}
+		return (CsrfTokenRequestHandler) ReflectionTestUtils.getField(filter, "requestHandler");
 	}
 
 	/**

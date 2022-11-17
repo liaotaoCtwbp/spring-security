@@ -23,7 +23,7 @@ import org.springframework.security.config.annotation.SecurityBuilder;
 import org.springframework.security.config.annotation.SecurityConfigurer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.openid.OpenIDAuthenticationFilter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.security.web.access.channel.ChannelProcessingFilter;
@@ -42,6 +42,8 @@ import org.springframework.security.web.jaasapi.JaasApiIntegrationFilter;
 import org.springframework.security.web.savedrequest.RequestCacheAwareFilter;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
 import org.springframework.security.web.session.ConcurrentSessionFilter;
+import org.springframework.security.web.session.DisableEncodeUrlFilter;
+import org.springframework.security.web.session.ForceEagerSessionCreationFilter;
 import org.springframework.security.web.session.SessionManagementFilter;
 
 /**
@@ -124,6 +126,8 @@ public interface HttpSecurityBuilder<H extends HttpSecurityBuilder<H>>
 	 * The ordering of the Filters is:
 	 *
 	 * <ul>
+	 * <li>{@link ForceEagerSessionCreationFilter}</li>
+	 * <li>{@link DisableEncodeUrlFilter}</li>
 	 * <li>{@link ChannelProcessingFilter}</li>
 	 * <li>{@link SecurityContextPersistenceFilter}</li>
 	 * <li>{@link LogoutFilter}</li>
@@ -132,12 +136,11 @@ public interface HttpSecurityBuilder<H extends HttpSecurityBuilder<H>>
 	 * <li><a href="
 	 * {@docRoot}/org/springframework/security/cas/web/CasAuthenticationFilter.html">CasAuthenticationFilter</a></li>
 	 * <li>{@link UsernamePasswordAuthenticationFilter}</li>
-	 * <li>{@link OpenIDAuthenticationFilter}</li>
 	 * <li>{@link org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter}</li>
 	 * <li>{@link org.springframework.security.web.authentication.ui.DefaultLogoutPageGeneratingFilter}</li>
 	 * <li>{@link ConcurrentSessionFilter}</li>
 	 * <li>{@link DigestAuthenticationFilter}</li>
-	 * <li>{@link org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter}</li>
+	 * <li>{@link BearerTokenAuthenticationFilter}</li>
 	 * <li>{@link BasicAuthenticationFilter}</li>
 	 * <li>{@link RequestCacheAwareFilter}</li>
 	 * <li>{@link SecurityContextHolderAwareRequestFilter}</li>

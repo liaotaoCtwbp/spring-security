@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,9 +37,11 @@ import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.security.access.expression.SecurityExpressionHandler;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.SecurityConfigurer;
 import org.springframework.security.config.annotation.web.WebSecurityConfigurer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.crypto.RsaKeyConversionServicePostProcessor;
 import org.springframework.security.context.DelegatingApplicationListener;
@@ -47,17 +49,14 @@ import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.web.FilterInvocation;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.WebInvocationPrivilegeEvaluator;
-import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
 import org.springframework.security.web.context.AbstractSecurityWebApplicationInitializer;
-import org.springframework.util.Assert;
 
 /**
  * Uses a {@link WebSecurity} to create the {@link FilterChainProxy} that performs the web
  * based security for Spring Security. It then exports the necessary beans. Customizations
- * can be made to {@link WebSecurity} by extending {@link WebSecurityConfigurerAdapter}
- * and exposing it as a {@link Configuration} or implementing
- * {@link WebSecurityConfigurer} and exposing it as a {@link Configuration}. This
- * configuration is imported when using {@link EnableWebSecurity}.
+ * can be made to {@link WebSecurity} by implementing {@link WebSecurityConfigurer} and
+ * exposing it as a {@link Configuration} or exposing a {@link WebSecurityCustomizer}
+ * bean. This configuration is imported when using {@link EnableWebSecurity}.
  *
  * @author Rob Winch
  * @author Keesun Baik
@@ -83,6 +82,9 @@ public class WebSecurityConfiguration implements ImportAware, BeanClassLoaderAwa
 	@Autowired(required = false)
 	private ObjectPostProcessor<Object> objectObjectPostProcessor;
 
+	@Autowired(required = false)
+	private HttpSecurity httpSecurity;
+
 	@Bean
 	public static DelegatingApplicationListener delegatingApplicationListener() {
 		return new DelegatingApplicationListener();
@@ -101,24 +103,17 @@ public class WebSecurityConfiguration implements ImportAware, BeanClassLoaderAwa
 	 */
 	@Bean(name = AbstractSecurityWebApplicationInitializer.DEFAULT_FILTER_NAME)
 	public Filter springSecurityFilterChain() throws Exception {
-		boolean hasConfigurers = this.webSecurityConfigurers != null && !this.webSecurityConfigurers.isEmpty();
 		boolean hasFilterChain = !this.securityFilterChains.isEmpty();
-		Assert.state(!(hasConfigurers && hasFilterChain),
-				"Found WebSecurityConfigurerAdapter as well as SecurityFilterChain. Please select just one.");
-		if (!hasConfigurers && !hasFilterChain) {
-			WebSecurityConfigurerAdapter adapter = this.objectObjectPostProcessor
-					.postProcess(new WebSecurityConfigurerAdapter() {
-					});
-			this.webSecurity.apply(adapter);
+		if (!hasFilterChain) {
+			this.webSecurity.addSecurityFilterChainBuilder(() -> {
+				this.httpSecurity.authorizeHttpRequests((authorize) -> authorize.anyRequest().authenticated());
+				this.httpSecurity.formLogin(Customizer.withDefaults());
+				this.httpSecurity.httpBasic(Customizer.withDefaults());
+				return this.httpSecurity.build();
+			});
 		}
 		for (SecurityFilterChain securityFilterChain : this.securityFilterChains) {
 			this.webSecurity.addSecurityFilterChainBuilder(() -> securityFilterChain);
-			for (Filter filter : securityFilterChain.getFilters()) {
-				if (filter instanceof FilterSecurityInterceptor) {
-					this.webSecurity.securityInterceptor((FilterSecurityInterceptor) filter);
-					break;
-				}
-			}
 		}
 		for (WebSecurityCustomizer customizer : this.webSecurityCustomizers) {
 			customizer.customize(this.webSecurity);

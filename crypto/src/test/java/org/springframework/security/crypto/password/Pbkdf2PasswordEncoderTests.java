@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,9 +28,9 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 
 public class Pbkdf2PasswordEncoderTests {
 
-	private Pbkdf2PasswordEncoder encoder = new Pbkdf2PasswordEncoder("secret");
+	private Pbkdf2PasswordEncoder encoder = new Pbkdf2PasswordEncoder("secret", 8, 185000, 256);
 
-	private Pbkdf2PasswordEncoder encoderSalt16 = new Pbkdf2PasswordEncoder("", 16);
+	private Pbkdf2PasswordEncoder encoderSalt16 = new Pbkdf2PasswordEncoder("", 16, 185000, 256);
 
 	private Pbkdf2PasswordEncoder[] encoders = new Pbkdf2PasswordEncoder[] { this.encoder, this.encoderSalt16 };
 
@@ -198,6 +198,14 @@ public class Pbkdf2PasswordEncoderTests {
 		assertThat(this.encoderSalt16.matches(rawPassword, encodedPassword)).isTrue();
 	}
 
+	@Test
+	public void matchWhenDefaultsForSpringSecurity_v5_8ThenSuccess() {
+		Pbkdf2PasswordEncoder encoder = Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+		String rawPassword = "password";
+		String encodedPassword = "fefe5120467e5d4ccff442dbb2fa86d276262d97435c0c54e5eebced51ffd144fcb05eb53fea2677216c4f3250010006";
+		assertThat(encoder.matches(rawPassword, encodedPassword)).isTrue();
+	}
+
 	/**
 	 * Used to find the iteration count that takes .5 seconds.
 	 */
@@ -213,7 +221,7 @@ public class Pbkdf2PasswordEncoderTests {
 		long avg = 0;
 		while (avg < HALF_SECOND) {
 			iterations += 10000;
-			Pbkdf2PasswordEncoder encoder = new Pbkdf2PasswordEncoder("", iterations, 256);
+			Pbkdf2PasswordEncoder encoder = new Pbkdf2PasswordEncoder("", 8, iterations, 256);
 			String encoded = encoder.encode("password");
 			System.out.println("Trying " + iterations);
 			long start = System.currentTimeMillis();

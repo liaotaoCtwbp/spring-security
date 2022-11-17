@@ -17,16 +17,18 @@
 package org.springframework.security.web.util.matcher;
 
 import jakarta.servlet.http.HttpServletRequest;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.security.web.util.matcher.RegexRequestMatcher.regexMatcher;
 
 /**
  * @author Luke Taylor
@@ -102,9 +104,65 @@ public class RegexRequestMatcherTests {
 	}
 
 	@Test
+	public void matchesWithCarriageReturn() {
+		RegexRequestMatcher matcher = new RegexRequestMatcher(".*", null);
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/blah%0a");
+		request.setServletPath("/blah\n");
+		assertThat(matcher.matches(request)).isTrue();
+	}
+
+	@Test
+	public void matchesWithLineFeed() {
+		RegexRequestMatcher matcher = new RegexRequestMatcher(".*", null);
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/blah%0d");
+		request.setServletPath("/blah\r");
+		assertThat(matcher.matches(request)).isTrue();
+	}
+
+	@Test
 	public void toStringThenFormatted() {
 		RegexRequestMatcher matcher = new RegexRequestMatcher("/blah", "GET");
 		assertThat(matcher.toString()).isEqualTo("Regex [pattern='/blah', GET]");
+	}
+
+	@Test
+	public void matchesWhenRequestUriMatchesThenMatchesTrue() {
+		RegexRequestMatcher matcher = regexMatcher(".*");
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/something/anything");
+		assertThat(matcher.matches(request)).isTrue();
+	}
+
+	@Test
+	public void matchesWhenRequestUriDontMatchThenMatchesFalse() {
+		RegexRequestMatcher matcher = regexMatcher(".*\\?param=value");
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/something/anything");
+		assertThat(matcher.matches(request)).isFalse();
+	}
+
+	@Test
+	public void matchesWhenRequestMethodMatchesThenMatchesTrue() {
+		RegexRequestMatcher matcher = regexMatcher(HttpMethod.GET);
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/something/anything");
+		assertThat(matcher.matches(request)).isTrue();
+	}
+
+	@Test
+	public void matchesWhenRequestMethodDontMatchThenMatchesFalse() {
+		RegexRequestMatcher matcher = regexMatcher(HttpMethod.POST);
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/something/anything");
+		assertThat(matcher.matches(request)).isFalse();
+	}
+
+	@Test
+	public void staticRegexMatcherWhenNoPatternThenException() {
+		assertThatIllegalArgumentException().isThrownBy(() -> regexMatcher((String) null))
+				.withMessage("pattern cannot be empty");
+	}
+
+	@Test
+	public void staticRegexMatcherNoMethodThenException() {
+		assertThatIllegalArgumentException().isThrownBy(() -> regexMatcher((HttpMethod) null))
+				.withMessage("method cannot be null");
 	}
 
 	private HttpServletRequest createRequestWithNullMethod(String path) {

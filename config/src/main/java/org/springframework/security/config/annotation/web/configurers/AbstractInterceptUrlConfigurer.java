@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,9 @@ import org.springframework.security.web.access.intercept.FilterSecurityIntercept
  * @since 3.2
  * @see ExpressionUrlAuthorizationConfigurer
  * @see UrlAuthorizationConfigurer
+ * @deprecated Use {@link AuthorizeHttpRequestsConfigurer} instead
  */
+@Deprecated
 public abstract class AbstractInterceptUrlConfigurer<C extends AbstractInterceptUrlConfigurer<C, H>, H extends HttpSecurityBuilder<H>>
 		extends AbstractHttpConfigurer<C, H> {
 
@@ -144,6 +146,7 @@ public abstract class AbstractInterceptUrlConfigurer<C extends AbstractIntercept
 		securityInterceptor.setSecurityMetadataSource(metadataSource);
 		securityInterceptor.setAccessDecisionManager(getAccessDecisionManager(http));
 		securityInterceptor.setAuthenticationManager(authenticationManager);
+		securityInterceptor.setSecurityContextHolderStrategy(getSecurityContextHolderStrategy());
 		securityInterceptor.afterPropertiesSet();
 		return securityInterceptor;
 	}

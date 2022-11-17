@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
+import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 import org.springframework.security.web.header.writers.frameoptions.StaticAllowFromStrategy;
 import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
@@ -59,7 +62,7 @@ public class NamespaceHttpHeadersTests {
 		defaultHeaders.put("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate");
 		defaultHeaders.put("Expires", "0");
 		defaultHeaders.put("Pragma", "no-cache");
-		defaultHeaders.put("X-XSS-Protection", "1; mode=block");
+		defaultHeaders.put("X-XSS-Protection", "0");
 	}
 	public final SpringTestContext spring = new SpringTestContext(this);
 
@@ -113,7 +116,7 @@ public class NamespaceHttpHeadersTests {
 	@Test
 	public void requestWhenXssCustomThenBehaviorMatchesNamespace() throws Exception {
 		this.spring.register(XssProtectionCustomConfig.class).autowire();
-		this.mvc.perform(get("/")).andExpect(includes(Collections.singletonMap("X-XSS-Protection", "1")));
+		this.mvc.perform(get("/")).andExpect(includes(Collections.singletonMap("X-XSS-Protection", "1; mode=block")));
 	}
 
 	@Test
@@ -150,54 +153,61 @@ public class NamespaceHttpHeadersTests {
 		};
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class HeadersDefaultConfig extends WebSecurityConfigurerAdapter {
+	static class HeadersDefaultConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class HeadersCacheControlConfig extends WebSecurityConfigurerAdapter {
+	static class HeadersCacheControlConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
 					.defaultsDisabled()
 					.cacheControl();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class HstsConfig extends WebSecurityConfigurerAdapter {
+	static class HstsConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
 					.defaultsDisabled()
 					.httpStrictTransportSecurity();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class HstsCustomConfig extends WebSecurityConfigurerAdapter {
+	static class HstsCustomConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
@@ -207,16 +217,18 @@ public class NamespaceHttpHeadersTests {
 						.requestMatcher(AnyRequestMatcher.INSTANCE)
 						.maxAgeInSeconds(15768000)
 						.includeSubDomains(false);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class FrameOptionsSameOriginConfig extends WebSecurityConfigurerAdapter {
+	static class FrameOptionsSameOriginConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
@@ -224,16 +236,18 @@ public class NamespaceHttpHeadersTests {
 					.defaultsDisabled()
 					.frameOptions()
 						.sameOrigin();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class FrameOptionsAllowFromConfig extends WebSecurityConfigurerAdapter {
+	static class FrameOptionsAllowFromConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
@@ -241,71 +255,79 @@ public class NamespaceHttpHeadersTests {
 					.defaultsDisabled()
 					.addHeaderWriter(new XFrameOptionsHeaderWriter(
 							new StaticAllowFromStrategy(URI.create("https://example.com"))));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class XssProtectionConfig extends WebSecurityConfigurerAdapter {
+	static class XssProtectionConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
 					// xss-protection
 					.defaultsDisabled()
 					.xssProtection();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class XssProtectionCustomConfig extends WebSecurityConfigurerAdapter {
+	static class XssProtectionCustomConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
 					// xss-protection@enabled and xss-protection@block
 					.defaultsDisabled()
 					.xssProtection()
-						.xssProtectionEnabled(true)
-						.block(false);
+						.headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK);
 			// @formatter:on
+			return http.build();
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ContentTypeOptionsConfig extends WebSecurityConfigurerAdapter {
+	static class ContentTypeOptionsConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
 					// content-type-options
 					.defaultsDisabled()
 					.contentTypeOptions();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class HeaderRefConfig extends WebSecurityConfigurerAdapter {
+	static class HeaderRefConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.headers()
 					.defaultsDisabled()
 					.addHeaderWriter(new StaticHeadersWriter("customHeaderName", "customHeaderValue"));
+			return http.build();
 			// @formatter:on
 		}
 

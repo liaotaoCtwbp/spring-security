@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -79,30 +82,50 @@ public class CsrfConfigurerIgnoringRequestMatchersTests {
 		this.mvc.perform(put("/no-csrf")).andExpect(status().isOk());
 	}
 
+	@Test
+	public void requestWhenIgnoringRequestMatcherPatternThenIgnores() throws Exception {
+		this.spring.register(IgnoringPathsAndMatchersPatternConfig.class, BasicController.class).autowire();
+		this.mvc.perform(put("/csrf")).andExpect(status().isForbidden());
+		this.mvc.perform(post("/csrf")).andExpect(status().isForbidden());
+		this.mvc.perform(put("/no-csrf")).andExpect(status().isOk());
+	}
+
+	@Test
+	public void requestWhenIgnoringRequestMatcherPatternInLambdaThenIgnores() throws Exception {
+		this.spring.register(IgnoringPathsAndMatchersPatternInLambdaConfig.class, BasicController.class).autowire();
+		this.mvc.perform(put("/csrf")).andExpect(status().isForbidden());
+		this.mvc.perform(post("/csrf")).andExpect(status().isForbidden());
+		this.mvc.perform(put("/no-csrf")).andExpect(status().isOk());
+	}
+
+	@Configuration
 	@EnableWebSecurity
-	static class IgnoringRequestMatchers extends WebSecurityConfigurerAdapter {
+	static class IgnoringRequestMatchers {
 
 		RequestMatcher requestMatcher = (request) -> HttpMethod.POST.name().equals(request.getMethod());
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.csrf()
 					.requireCsrfProtectionMatcher(new AntPathRequestMatcher("/path"))
 					.ignoringRequestMatchers(this.requestMatcher);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class IgnoringRequestInLambdaMatchers extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class IgnoringRequestInLambdaMatchers {
 
 		RequestMatcher requestMatcher = (request) -> HttpMethod.POST.name().equals(request.getMethod());
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.csrf((csrf) ->
@@ -110,43 +133,84 @@ public class CsrfConfigurerIgnoringRequestMatchersTests {
 						.requireCsrfProtectionMatcher(new AntPathRequestMatcher("/path"))
 						.ignoringRequestMatchers(this.requestMatcher)
 				);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class IgnoringPathsAndMatchers extends WebSecurityConfigurerAdapter {
+	static class IgnoringPathsAndMatchers {
 
 		RequestMatcher requestMatcher = (request) -> HttpMethod.POST.name().equals(request.getMethod());
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.csrf()
-					.ignoringAntMatchers("/no-csrf")
+					.ignoringRequestMatchers(new AntPathRequestMatcher("/no-csrf"))
 					.ignoringRequestMatchers(this.requestMatcher);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class IgnoringPathsAndMatchersInLambdaConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class IgnoringPathsAndMatchersInLambdaConfig {
 
 		RequestMatcher requestMatcher = (request) -> HttpMethod.POST.name().equals(request.getMethod());
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.csrf((csrf) ->
 					csrf
-						.ignoringAntMatchers("/no-csrf")
+						.ignoringRequestMatchers(new AntPathRequestMatcher("/no-csrf"))
 						.ignoringRequestMatchers(this.requestMatcher)
 				);
+			return http.build();
 			// @formatter:on
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	@EnableWebMvc
+	static class IgnoringPathsAndMatchersPatternConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			// @formatter:off
+			http
+				.csrf()
+					.ignoringRequestMatchers("/no-csrf");
+			// @formatter:on
+			return http.build();
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	@EnableWebMvc
+	static class IgnoringPathsAndMatchersPatternInLambdaConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			// @formatter:off
+			http
+				.csrf((csrf) -> csrf
+					.ignoringRequestMatchers("/no-csrf")
+				);
+			// @formatter:on
+			return http.build();
 		}
 
 	}

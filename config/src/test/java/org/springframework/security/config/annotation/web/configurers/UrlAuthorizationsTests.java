@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,24 +19,26 @@ package org.springframework.security.config.annotation.web.configurers;
 import java.util.List;
 
 import jakarta.servlet.Filter;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.vote.AffirmativeBased;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.test.context.annotation.SecurityTestExecutionListeners;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -130,37 +132,42 @@ public class UrlAuthorizationsTests {
 		return null;
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RoleConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class RoleConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
-					.antMatchers("/role-user-authority").hasAnyAuthority("ROLE_USER")
-					.antMatchers("/role-admin-authority").hasAnyAuthority("ROLE_ADMIN")
-					.antMatchers("/role-user-admin-authority").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
-					.antMatchers("/role-user").hasAnyRole("USER")
-					.antMatchers("/role-admin").hasAnyRole("ADMIN")
-					.antMatchers("/role-user-admin").hasAnyRole("USER", "ADMIN");
+					.requestMatchers("/role-user-authority").hasAnyAuthority("ROLE_USER")
+					.requestMatchers("/role-admin-authority").hasAnyAuthority("ROLE_ADMIN")
+					.requestMatchers("/role-user-admin-authority").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
+					.requestMatchers("/role-user").hasAnyRole("USER")
+					.requestMatchers("/role-admin").hasAnyRole("ADMIN")
+					.requestMatchers("/role-user-admin").hasAnyRole("USER", "ADMIN");
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class NoSpecificAccessDecisionManagerConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class NoSpecificAccessDecisionManagerConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
-			ApplicationContext context = getApplicationContext();
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http, ApplicationContext context) throws Exception {
 			UrlAuthorizationConfigurer<HttpSecurity>.StandardInterceptUrlRegistry registry = http
 					.apply(new UrlAuthorizationConfigurer(context)).getRegistry();
 			// @formatter:off
 			registry
-					.antMatchers("/a").hasRole("ADMIN")
+					.requestMatchers("/a").hasRole("ADMIN")
 					.anyRequest().hasRole("USER");
+			return http.build();
 			// @formatter:on
 		}
 

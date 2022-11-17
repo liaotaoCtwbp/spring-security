@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,35 +19,54 @@ package org.springframework.security.config.annotation.web;
 import java.util.List;
 
 import jakarta.servlet.DispatcherType;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.ObjectPostProcessor;
+import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.DispatcherTypeRequestMatcher;
 import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests for {@link AbstractRequestMatcherRegistry}.
  *
  * @author Joe Grandja
+ * @author Marcus Da Coregio
  */
 public class AbstractRequestMatcherRegistryTests {
+
+	private static final ObjectPostProcessor<Object> NO_OP_OBJECT_POST_PROCESSOR = new ObjectPostProcessor<Object>() {
+		@Override
+		public <O> O postProcess(O object) {
+			return object;
+		}
+	};
 
 	private TestRequestMatcherRegistry matcherRegistry;
 
 	@BeforeEach
 	public void setUp() {
 		this.matcherRegistry = new TestRequestMatcherRegistry();
+		ApplicationContext context = mock(ApplicationContext.class);
+		given(context.getBean(ObjectPostProcessor.class)).willReturn(NO_OP_OBJECT_POST_PROCESSOR);
+		this.matcherRegistry.setApplicationContext(context);
+		mockMvcIntrospector(true);
 	}
 
 	@Test
 	public void regexMatchersWhenHttpMethodAndPatternParamsThenReturnRegexRequestMatcherType() {
-		List<RequestMatcher> requestMatchers = this.matcherRegistry.regexMatchers(HttpMethod.GET, "/a.*");
+		List<RequestMatcher> requestMatchers = this.matcherRegistry
+				.requestMatchers(new RegexRequestMatcher("/a.*", HttpMethod.GET.name()));
 		assertThat(requestMatchers).isNotEmpty();
 		assertThat(requestMatchers.size()).isEqualTo(1);
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(RegexRequestMatcher.class);
@@ -55,7 +74,8 @@ public class AbstractRequestMatcherRegistryTests {
 
 	@Test
 	public void regexMatchersWhenPatternParamThenReturnRegexRequestMatcherType() {
-		List<RequestMatcher> requestMatchers = this.matcherRegistry.regexMatchers("/a.*");
+		List<RequestMatcher> requestMatchers = this.matcherRegistry
+				.requestMatchers(new RegexRequestMatcher("/a.*", null));
 		assertThat(requestMatchers).isNotEmpty();
 		assertThat(requestMatchers.size()).isEqualTo(1);
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(RegexRequestMatcher.class);
@@ -63,7 +83,8 @@ public class AbstractRequestMatcherRegistryTests {
 
 	@Test
 	public void antMatchersWhenHttpMethodAndPatternParamsThenReturnAntPathRequestMatcherType() {
-		List<RequestMatcher> requestMatchers = this.matcherRegistry.antMatchers(HttpMethod.GET, "/a.*");
+		List<RequestMatcher> requestMatchers = this.matcherRegistry
+				.requestMatchers(new AntPathRequestMatcher("/a.*", HttpMethod.GET.name()));
 		assertThat(requestMatchers).isNotEmpty();
 		assertThat(requestMatchers.size()).isEqualTo(1);
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(AntPathRequestMatcher.class);
@@ -71,7 +92,7 @@ public class AbstractRequestMatcherRegistryTests {
 
 	@Test
 	public void antMatchersWhenPatternParamThenReturnAntPathRequestMatcherType() {
-		List<RequestMatcher> requestMatchers = this.matcherRegistry.antMatchers("/a.*");
+		List<RequestMatcher> requestMatchers = this.matcherRegistry.requestMatchers(new AntPathRequestMatcher("/a.*"));
 		assertThat(requestMatchers).isNotEmpty();
 		assertThat(requestMatchers.size()).isEqualTo(1);
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(AntPathRequestMatcher.class);
@@ -94,17 +115,44 @@ public class AbstractRequestMatcherRegistryTests {
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(DispatcherTypeRequestMatcher.class);
 	}
 
+	@Test
+	public void requestMatchersWhenPatternAndMvcPresentThenReturnMvcRequestMatcherType() {
+		List<RequestMatcher> requestMatchers = this.matcherRegistry.requestMatchers("/path");
+		assertThat(requestMatchers).isNotEmpty();
+		assertThat(requestMatchers.size()).isEqualTo(1);
+		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(MvcRequestMatcher.class);
+	}
+
+	@Test
+	public void requestMatchersWhenHttpMethodAndPatternAndMvcPresentThenReturnMvcRequestMatcherType() {
+		List<RequestMatcher> requestMatchers = this.matcherRegistry.requestMatchers(HttpMethod.GET, "/path");
+		assertThat(requestMatchers).isNotEmpty();
+		assertThat(requestMatchers.size()).isEqualTo(1);
+		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(MvcRequestMatcher.class);
+	}
+
+	@Test
+	public void requestMatchersWhenHttpMethodAndMvcPresentThenReturnMvcRequestMatcherType() {
+		List<RequestMatcher> requestMatchers = this.matcherRegistry.requestMatchers(HttpMethod.GET);
+		assertThat(requestMatchers).isNotEmpty();
+		assertThat(requestMatchers.size()).isEqualTo(1);
+		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(MvcRequestMatcher.class);
+	}
+
+	@Test
+	public void requestMatchersWhenMvcPresentInClassPathAndMvcIntrospectorBeanNotAvailableThenException() {
+		mockMvcIntrospector(false);
+		assertThatExceptionOfType(NoSuchBeanDefinitionException.class)
+				.isThrownBy(() -> this.matcherRegistry.requestMatchers("/path")).withMessageContaining(
+						"Please ensure Spring Security & Spring MVC are configured in a shared ApplicationContext");
+	}
+
+	private void mockMvcIntrospector(boolean isPresent) {
+		ApplicationContext context = this.matcherRegistry.getApplicationContext();
+		given(context.containsBean("mvcHandlerMappingIntrospector")).willReturn(isPresent);
+	}
+
 	private static class TestRequestMatcherRegistry extends AbstractRequestMatcherRegistry<List<RequestMatcher>> {
-
-		@Override
-		public List<RequestMatcher> mvcMatchers(String... mvcPatterns) {
-			return null;
-		}
-
-		@Override
-		public List<RequestMatcher> mvcMatchers(HttpMethod method, String... mvcPatterns) {
-			return null;
-		}
 
 		@Override
 		protected List<RequestMatcher> chainRequestMatchers(List<RequestMatcher> requestMatchers) {

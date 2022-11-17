@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package org.springframework.security.config.annotation.web.configurers;
 
 import jakarta.servlet.http.HttpServletRequest;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -25,19 +24,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.spy;
@@ -110,32 +110,36 @@ public class NamespaceHttpFormLoginTests {
 		return verify(this.spring.getContext().getBean(beanClass));
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class FormLoginConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class FormLoginConfig {
 
-		@Override
-		public void configure(WebSecurity web) {
-			web.ignoring().antMatchers("/resources/**");
+		@Bean
+		WebSecurityCustomizer webSecurityCustomizer() {
+			return (web) -> web.ignoring().requestMatchers("/resources/**");
 		}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.authorizeRequests()
 					.anyRequest().hasRole("USER")
 					.and()
 				.formLogin();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class FormLoginCustomConfig extends WebSecurityConfigurerAdapter {
+	static class FormLoginCustomConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			boolean alwaysUseDefaultSuccess = true;
 			// @formatter:off
 			http
@@ -148,17 +152,19 @@ public class NamespaceHttpFormLoginTests {
 					.loginPage("/authentication/login") // form-login@login-page
 					.failureUrl("/authentication/login?failed") // form-login@authentication-failure-url
 					.loginProcessingUrl("/authentication/login/process") // form-login@login-processing-url
-					.defaultSuccessUrl("/default", alwaysUseDefaultSuccess); // form-login@default-target-url / form-login@always-use-default-target
+					.defaultSuccessUrl("/default", alwaysUseDefaultSuccess);
+			return http.build(); // form-login@default-target-url / form-login@always-use-default-target
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class FormLoginCustomRefsConfig extends WebSecurityConfigurerAdapter {
+	static class FormLoginCustomRefsConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			SavedRequestAwareAuthenticationSuccessHandler successHandler = new SavedRequestAwareAuthenticationSuccessHandler();
 			successHandler.setDefaultTargetUrl("/custom/targetUrl");
 			// @formatter:off
@@ -172,6 +178,7 @@ public class NamespaceHttpFormLoginTests {
 					.successHandler(successHandler) // form-login@authentication-success-handler-ref
 					.authenticationDetailsSource(authenticationDetailsSource()) // form-login@authentication-details-source-ref
 					.and();
+			return http.build();
 			// @formatter:on
 		}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 package org.springframework.security.config.web.server
 
 import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler
-import org.springframework.security.web.server.csrf.CsrfWebFilter
 import org.springframework.security.web.server.csrf.ServerCsrfTokenRepository
+import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestHandler
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher
 
 /**
@@ -31,15 +31,15 @@ import org.springframework.security.web.server.util.matcher.ServerWebExchangeMat
  * @property csrfTokenRepository the [ServerCsrfTokenRepository] used to persist the CSRF token.
  * @property requireCsrfProtectionMatcher the [ServerWebExchangeMatcher] used to determine when CSRF protection
  * is enabled.
- * @property tokenFromMultipartDataEnabled if true, the [CsrfWebFilter] should try to resolve the actual CSRF
- * token from the body of multipart data requests.
+ * @property csrfTokenRequestHandler the  [ServerCsrfTokenRequestHandler] that is used to make the CSRF token
+ * available as an exchange attribute
  */
 @ServerSecurityMarker
 class ServerCsrfDsl {
     var accessDeniedHandler: ServerAccessDeniedHandler? = null
     var csrfTokenRepository: ServerCsrfTokenRepository? = null
     var requireCsrfProtectionMatcher: ServerWebExchangeMatcher? = null
-    var tokenFromMultipartDataEnabled: Boolean? = null
+    var csrfTokenRequestHandler: ServerCsrfTokenRequestHandler? = null
 
     private var disabled = false
 
@@ -55,7 +55,7 @@ class ServerCsrfDsl {
             accessDeniedHandler?.also { csrf.accessDeniedHandler(accessDeniedHandler) }
             csrfTokenRepository?.also { csrf.csrfTokenRepository(csrfTokenRepository) }
             requireCsrfProtectionMatcher?.also { csrf.requireCsrfProtectionMatcher(requireCsrfProtectionMatcher) }
-            tokenFromMultipartDataEnabled?.also { csrf.tokenFromMultipartDataEnabled(tokenFromMultipartDataEnabled!!) }
+            csrfTokenRequestHandler?.also { csrf.csrfTokenRequestHandler(csrfTokenRequestHandler) }
             if (disabled) {
                 csrf.disable()
             }

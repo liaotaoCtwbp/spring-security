@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,16 +27,12 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.client.ClientCredentialsOAuth2AuthorizedClientProvider;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProvider;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
 import org.springframework.security.oauth2.client.annotation.RegisteredOAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
-import org.springframework.security.oauth2.client.endpoint.OAuth2ClientCredentialsGrantRequest;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
@@ -72,9 +68,10 @@ public final class OAuth2AuthorizedClientArgumentResolver implements HandlerMeth
 	private static final Authentication ANONYMOUS_AUTHENTICATION = new AnonymousAuthenticationToken("anonymous",
 			"anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
 
-	private OAuth2AuthorizedClientManager authorizedClientManager;
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+			.getContextHolderStrategy();
 
-	private boolean defaultAuthorizedClientManager;
+	private OAuth2AuthorizedClientManager authorizedClientManager;
 
 	/**
 	 * Constructs an {@code OAuth2AuthorizedClientArgumentResolver} using the provided
@@ -100,7 +97,6 @@ public final class OAuth2AuthorizedClientArgumentResolver implements HandlerMeth
 		Assert.notNull(authorizedClientRepository, "authorizedClientRepository cannot be null");
 		this.authorizedClientManager = new DefaultOAuth2AuthorizedClientManager(clientRegistrationRepository,
 				authorizedClientRepository);
-		this.defaultAuthorizedClientManager = true;
 	}
 
 	@Override
@@ -120,7 +116,7 @@ public final class OAuth2AuthorizedClientArgumentResolver implements HandlerMeth
 					+ "It must be provided via @RegisteredOAuth2AuthorizedClient(\"client1\") or "
 					+ "@RegisteredOAuth2AuthorizedClient(registrationId = \"client1\").");
 		}
-		Authentication principal = SecurityContextHolder.getContext().getAuthentication();
+		Authentication principal = this.securityContextHolderStrategy.getContext().getAuthentication();
 		if (principal == null) {
 			principal = ANONYMOUS_AUTHENTICATION;
 		}
@@ -140,7 +136,7 @@ public final class OAuth2AuthorizedClientArgumentResolver implements HandlerMeth
 	private String resolveClientRegistrationId(MethodParameter parameter) {
 		RegisteredOAuth2AuthorizedClient authorizedClientAnnotation = AnnotatedElementUtils
 				.findMergedAnnotation(parameter.getParameter(), RegisteredOAuth2AuthorizedClient.class);
-		Authentication principal = SecurityContextHolder.getContext().getAuthentication();
+		Authentication principal = this.securityContextHolderStrategy.getContext().getAuthentication();
 		if (!StringUtils.isEmpty(authorizedClientAnnotation.registrationId())) {
 			return authorizedClientAnnotation.registrationId();
 		}
@@ -154,45 +150,14 @@ public final class OAuth2AuthorizedClientArgumentResolver implements HandlerMeth
 	}
 
 	/**
-	 * Sets the client used when requesting an access token credential at the Token
-	 * Endpoint for the {@code client_credentials} grant.
-	 * @param clientCredentialsTokenResponseClient the client used when requesting an
-	 * access token credential at the Token Endpoint for the {@code client_credentials}
-	 * grant
-	 * @deprecated Use
-	 * {@link #OAuth2AuthorizedClientArgumentResolver(OAuth2AuthorizedClientManager)}
-	 * instead. Create an instance of
-	 * {@link ClientCredentialsOAuth2AuthorizedClientProvider} configured with a
-	 * {@link ClientCredentialsOAuth2AuthorizedClientProvider#setAccessTokenResponseClient(OAuth2AccessTokenResponseClient)
-	 * DefaultClientCredentialsTokenResponseClient} (or a custom one) and than supply it
-	 * to
-	 * {@link DefaultOAuth2AuthorizedClientManager#setAuthorizedClientProvider(OAuth2AuthorizedClientProvider)
-	 * DefaultOAuth2AuthorizedClientManager}.
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
 	 */
-	@Deprecated
-	public void setClientCredentialsTokenResponseClient(
-			OAuth2AccessTokenResponseClient<OAuth2ClientCredentialsGrantRequest> clientCredentialsTokenResponseClient) {
-		Assert.notNull(clientCredentialsTokenResponseClient, "clientCredentialsTokenResponseClient cannot be null");
-		Assert.state(this.defaultAuthorizedClientManager,
-				"The client cannot be set when the constructor used is \"OAuth2AuthorizedClientArgumentResolver(OAuth2AuthorizedClientManager)\". "
-						+ "Instead, use the constructor \"OAuth2AuthorizedClientArgumentResolver(ClientRegistrationRepository, OAuth2AuthorizedClientRepository)\".");
-		updateDefaultAuthorizedClientManager(clientCredentialsTokenResponseClient);
-	}
-
-	private void updateDefaultAuthorizedClientManager(
-			OAuth2AccessTokenResponseClient<OAuth2ClientCredentialsGrantRequest> clientCredentialsTokenResponseClient) {
-		// @formatter:off
-		OAuth2AuthorizedClientProvider authorizedClientProvider = OAuth2AuthorizedClientProviderBuilder.builder()
-				.authorizationCode()
-				.refreshToken()
-				.clientCredentials((configurer) ->
-						configurer.accessTokenResponseClient(clientCredentialsTokenResponseClient)
-				)
-				.password()
-				.build();
-		// @formatter:on
-		((DefaultOAuth2AuthorizedClientManager) this.authorizedClientManager)
-				.setAuthorizedClientProvider(authorizedClientProvider);
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 }

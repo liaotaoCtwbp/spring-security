@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,24 +26,22 @@ import org.springframework.web.server.ServerWebExchange;
  * Add the x-xss-protection header.
  *
  * @author Rob Winch
+ * @author Daniel Garnier-Moiroux
  * @since 5.0
  */
 public class XXssProtectionServerHttpHeadersWriter implements ServerHttpHeadersWriter {
 
 	public static final String X_XSS_PROTECTION = "X-XSS-Protection";
 
-	private boolean enabled;
-
-	private boolean block;
-
 	private ServerHttpHeadersWriter delegate;
+
+	private HeaderValue headerValue;
 
 	/**
 	 * Creates a new instance
 	 */
 	public XXssProtectionServerHttpHeadersWriter() {
-		this.enabled = true;
-		this.block = true;
+		this.headerValue = HeaderValue.DISABLED;
 		updateDelegate();
 	}
 
@@ -53,60 +51,67 @@ public class XXssProtectionServerHttpHeadersWriter implements ServerHttpHeadersW
 	}
 
 	/**
-	 * If true, will contain a value of 1. For example:
-	 *
-	 * <pre>
-	 * X-XSS-Protection: 1
-	 * </pre>
-	 *
-	 * or if {@link #setBlock(boolean)} is true
-	 *
-	 *
-	 * <pre>
-	 * X-XSS-Protection: 1; mode=block
-	 * </pre>
-	 *
-	 * If false, will explicitly disable specify that X-XSS-Protection is disabled. For
-	 * example:
+	 * Sets the value of the X-XSS-PROTECTION header. Defaults to
+	 * {@link HeaderValue#DISABLED}
+	 * <p>
+	 * If {@link HeaderValue#DISABLED}, will specify that X-XSS-Protection is disabled.
+	 * For example:
 	 *
 	 * <pre>
 	 * X-XSS-Protection: 0
 	 * </pre>
-	 * @param enabled the new value
+	 * <p>
+	 * If {@link HeaderValue#ENABLED}, will contain a value of 1, but will not specify the
+	 * mode as blocked. In this instance, any content will be attempted to be fixed. For
+	 * example:
+	 *
+	 * <pre>
+	 * X-XSS-Protection: 1
+	 * </pre>
+	 * <p>
+	 * If {@link HeaderValue#ENABLED_MODE_BLOCK}, will contain a value of 1 and will
+	 * specify mode as blocked. The content will be replaced with "#". For example:
+	 *
+	 * <pre>
+	 * X-XSS-Protection: 1 ; mode=block
+	 * </pre>
+	 * @param headerValue the new headerValue
+	 * @throws IllegalArgumentException if headerValue is null
+	 * @since 5.8
 	 */
-	public void setEnabled(boolean enabled) {
-		if (!enabled) {
-			setBlock(false);
-		}
-		this.enabled = enabled;
+	public void setHeaderValue(HeaderValue headerValue) {
+		Assert.notNull(headerValue, "headerValue cannot be null");
+		this.headerValue = headerValue;
 		updateDelegate();
 	}
 
 	/**
-	 * If false, will not specify the mode as blocked. In this instance, any content will
-	 * be attempted to be fixed. If true, the content will be replaced with "#".
-	 * @param block the new value
+	 * The value of the x-xss-protection header. One of: "0", "1", "1 ; mode=block"
+	 *
+	 * @author Daniel Garnier-Moiroux
+	 * @since 5.8
 	 */
-	public void setBlock(boolean block) {
-		Assert.isTrue(this.enabled || !block, "Cannot set block to true with enabled false");
-		this.block = block;
-		updateDelegate();
+	public enum HeaderValue {
+
+		DISABLED("0"), ENABLED("1"), ENABLED_MODE_BLOCK("1 ; mode=block");
+
+		private final String value;
+
+		HeaderValue(String value) {
+			this.value = value;
+		}
+
+		@Override
+		public String toString() {
+			return this.value;
+		}
+
 	}
 
 	private void updateDelegate() {
 		Builder builder = StaticServerHttpHeadersWriter.builder();
-		builder.header(X_XSS_PROTECTION, createHeaderValue());
+		builder.header(X_XSS_PROTECTION, this.headerValue.toString());
 		this.delegate = builder.build();
-	}
-
-	private String createHeaderValue() {
-		if (!this.enabled) {
-			return "0";
-		}
-		if (!this.block) {
-			return "1";
-		}
-		return "1 ; mode=block";
 	}
 
 }

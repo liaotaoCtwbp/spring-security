@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,8 @@ import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.core.GrantedAuthorityDefaults;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.util.Assert;
 
 /**
@@ -84,7 +86,11 @@ import org.springframework.util.Assert;
  * @author Eddú Meléndez
  * @since 3.2
  * @see EnableGlobalMethodSecurity
+ * @deprecated Use {@link PrePostMethodSecurityConfiguration},
+ * {@link SecuredMethodSecurityConfiguration}, or
+ * {@link Jsr250MethodSecurityConfiguration} instead
  */
+@Deprecated
 @Configuration(proxyBeanMethods = false)
 @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 public class GlobalMethodSecurityConfiguration implements ImportAware, SmartInitializingSingleton, BeanFactoryAware {
@@ -100,6 +106,9 @@ public class GlobalMethodSecurityConfiguration implements ImportAware, SmartInit
 		}
 
 	};
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+			.getContextHolderStrategy();
 
 	private DefaultMethodSecurityExpressionHandler defaultMethodExpressionHandler = new DefaultMethodSecurityExpressionHandler();
 
@@ -143,6 +152,7 @@ public class GlobalMethodSecurityConfiguration implements ImportAware, SmartInit
 		this.methodSecurityInterceptor.setAccessDecisionManager(accessDecisionManager());
 		this.methodSecurityInterceptor.setAfterInvocationManager(afterInvocationManager());
 		this.methodSecurityInterceptor.setSecurityMetadataSource(methodSecurityMetadataSource);
+		this.methodSecurityInterceptor.setSecurityContextHolderStrategy(this.securityContextHolderStrategy);
 		RunAsManager runAsManager = runAsManager();
 		if (runAsManager != null) {
 			this.methodSecurityInterceptor.setRunAsManager(runAsManager);
@@ -409,6 +419,12 @@ public class GlobalMethodSecurityConfiguration implements ImportAware, SmartInit
 			return;
 		}
 		this.expressionHandler = handlers.get(0);
+	}
+
+	@Autowired(required = false)
+	void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 	@Override

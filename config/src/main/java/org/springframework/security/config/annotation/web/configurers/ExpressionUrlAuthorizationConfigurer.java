@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 import org.springframework.context.ApplicationContext;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.access.AccessDecisionVoter;
 import org.springframework.security.access.ConfigAttribute;
 import org.springframework.security.access.PermissionEvaluator;
@@ -38,7 +37,6 @@ import org.springframework.security.web.FilterInvocation;
 import org.springframework.security.web.access.expression.DefaultWebSecurityExpressionHandler;
 import org.springframework.security.web.access.expression.ExpressionBasedFilterInvocationSecurityMetadataSource;
 import org.springframework.security.web.access.expression.WebExpressionVoter;
-import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
@@ -79,7 +77,9 @@ import org.springframework.util.StringUtils;
  * @author Yanming Zhou
  * @since 3.2
  * @see org.springframework.security.config.annotation.web.builders.HttpSecurity#authorizeRequests()
+ * @deprecated Use {@link AuthorizeHttpRequestsConfigurer} instead
  */
+@Deprecated
 public final class ExpressionUrlAuthorizationConfigurer<H extends HttpSecurityBuilder<H>>
 		extends AbstractInterceptUrlConfigurer<ExpressionUrlAuthorizationConfigurer<H>, H> {
 
@@ -221,16 +221,6 @@ public final class ExpressionUrlAuthorizationConfigurer<H extends HttpSecurityBu
 		}
 
 		@Override
-		public MvcMatchersAuthorizedUrl mvcMatchers(HttpMethod method, String... mvcPatterns) {
-			return new MvcMatchersAuthorizedUrl(createMvcMatchers(method, mvcPatterns));
-		}
-
-		@Override
-		public MvcMatchersAuthorizedUrl mvcMatchers(String... patterns) {
-			return mvcMatchers(null, patterns);
-		}
-
-		@Override
 		protected AuthorizedUrl chainRequestMatchersInternal(List<RequestMatcher> requestMatchers) {
 			return new AuthorizedUrl(requestMatchers);
 		}
@@ -261,31 +251,6 @@ public final class ExpressionUrlAuthorizationConfigurer<H extends HttpSecurityBu
 
 		public H and() {
 			return ExpressionUrlAuthorizationConfigurer.this.and();
-		}
-
-	}
-
-	/**
-	 * An {@link AuthorizedUrl} that allows optionally configuring the
-	 * {@link MvcRequestMatcher#setMethod(HttpMethod)}
-	 *
-	 * @author Rob Winch
-	 */
-	public final class MvcMatchersAuthorizedUrl extends AuthorizedUrl {
-
-		/**
-		 * Creates a new instance
-		 * @param requestMatchers the {@link RequestMatcher} instances to map
-		 */
-		private MvcMatchersAuthorizedUrl(List<MvcRequestMatcher> requestMatchers) {
-			super(requestMatchers);
-		}
-
-		public AuthorizedUrl servletPath(String servletPath) {
-			for (MvcRequestMatcher matcher : (List<MvcRequestMatcher>) getMatchers()) {
-				matcher.setServletPath(servletPath);
-			}
-			return this;
 		}
 
 	}
@@ -369,9 +334,7 @@ public final class ExpressionUrlAuthorizationConfigurer<H extends HttpSecurityBu
 		}
 
 		/**
-		 * Specify that URLs requires a specific IP Address or <a href=
-		 * "https://forum.spring.io/showthread.php?102783-How-to-use-hasIpAddress&p=343971#post343971"
-		 * >subnet</a>.
+		 * Specify that URLs requires a specific IP Address or subnet.
 		 * @param ipaddressExpression the ipaddress (i.e. 192.168.1.79) or local subnet
 		 * (i.e. 192.168.0/24)
 		 * @return the {@link ExpressionUrlAuthorizationConfigurer} for further

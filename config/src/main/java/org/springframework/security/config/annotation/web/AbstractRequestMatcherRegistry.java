@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import org.springframework.security.web.util.matcher.DispatcherTypeRequestMatche
 import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
+import org.springframework.util.ClassUtils;
 import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 
 /**
@@ -50,11 +51,20 @@ public abstract class AbstractRequestMatcherRegistry<C> {
 
 	private static final String HANDLER_MAPPING_INTROSPECTOR_BEAN_NAME = "mvcHandlerMappingIntrospector";
 
+	private static final String HANDLER_MAPPING_INTROSPECTOR = "org.springframework.web.servlet.handler.HandlerMappingIntrospector";
+
+	private static final boolean mvcPresent;
+
 	private static final RequestMatcher ANY_REQUEST = AnyRequestMatcher.INSTANCE;
 
 	private ApplicationContext context;
 
 	private boolean anyRequestConfigured = false;
+
+	static {
+		mvcPresent = ClassUtils.isPresent(HANDLER_MAPPING_INTROSPECTOR,
+				AbstractRequestMatcherRegistry.class.getClassLoader());
+	}
 
 	protected final void setApplicationContext(ApplicationContext context) {
 		this.context = context;
@@ -78,80 +88,6 @@ public abstract class AbstractRequestMatcherRegistry<C> {
 		this.anyRequestConfigured = true;
 		return configurer;
 	}
-
-	/**
-	 * Maps a {@link List} of
-	 * {@link org.springframework.security.web.util.matcher.AntPathRequestMatcher}
-	 * instances.
-	 * @param method the {@link HttpMethod} to use for any {@link HttpMethod}.
-	 * @return the object that is chained after creating the {@link RequestMatcher}
-	 */
-	public C antMatchers(HttpMethod method) {
-		return antMatchers(method, "/**");
-	}
-
-	/**
-	 * Maps a {@link List} of
-	 * {@link org.springframework.security.web.util.matcher.AntPathRequestMatcher}
-	 * instances.
-	 * @param method the {@link HttpMethod} to use or {@code null} for any
-	 * {@link HttpMethod}.
-	 * @param antPatterns the ant patterns to create. If {@code null} or empty, then
-	 * matches on nothing.
-	 * @return the object that is chained after creating the {@link RequestMatcher}
-	 */
-	public C antMatchers(HttpMethod method, String... antPatterns) {
-		Assert.state(!this.anyRequestConfigured, "Can't configure antMatchers after anyRequest");
-		return chainRequestMatchers(RequestMatchers.antMatchers(method, antPatterns));
-	}
-
-	/**
-	 * Maps a {@link List} of
-	 * {@link org.springframework.security.web.util.matcher.AntPathRequestMatcher}
-	 * instances that do not care which {@link HttpMethod} is used.
-	 * @param antPatterns the ant patterns to create
-	 * {@link org.springframework.security.web.util.matcher.AntPathRequestMatcher} from
-	 * @return the object that is chained after creating the {@link RequestMatcher}
-	 */
-	public C antMatchers(String... antPatterns) {
-		Assert.state(!this.anyRequestConfigured, "Can't configure antMatchers after anyRequest");
-		return chainRequestMatchers(RequestMatchers.antMatchers(antPatterns));
-	}
-
-	/**
-	 * <p>
-	 * Maps an {@link MvcRequestMatcher} that does not care which {@link HttpMethod} is
-	 * used. This matcher will use the same rules that Spring MVC uses for matching. For
-	 * example, often times a mapping of the path "/path" will match on "/path", "/path/",
-	 * "/path.html", etc.
-	 * </p>
-	 * <p>
-	 * If the current request will not be processed by Spring MVC, a reasonable default
-	 * using the pattern as a ant pattern will be used.
-	 * </p>
-	 * @param mvcPatterns the patterns to match on. The rules for matching are defined by
-	 * Spring MVC
-	 * @return the object that is chained after creating the {@link RequestMatcher}.
-	 */
-	public abstract C mvcMatchers(String... mvcPatterns);
-
-	/**
-	 * <p>
-	 * Maps an {@link MvcRequestMatcher} that also specifies a specific {@link HttpMethod}
-	 * to match on. This matcher will use the same rules that Spring MVC uses for
-	 * matching. For example, often times a mapping of the path "/path" will match on
-	 * "/path", "/path/", "/path.html", etc.
-	 * </p>
-	 * <p>
-	 * If the current request will not be processed by Spring MVC, a reasonable default
-	 * using the pattern as a ant pattern will be used.
-	 * </p>
-	 * @param method the HTTP method to match on
-	 * @param mvcPatterns the patterns to match on. The rules for matching are defined by
-	 * Spring MVC
-	 * @return the object that is chained after creating the {@link RequestMatcher}.
-	 */
-	public abstract C mvcMatchers(HttpMethod method, String... mvcPatterns);
 
 	/**
 	 * Creates {@link MvcRequestMatcher} instances for the method and patterns passed in
@@ -179,34 +115,6 @@ public abstract class AbstractRequestMatcherRegistry<C> {
 			matchers.add(matcher);
 		}
 		return matchers;
-	}
-
-	/**
-	 * Maps a {@link List} of
-	 * {@link org.springframework.security.web.util.matcher.RegexRequestMatcher}
-	 * instances.
-	 * @param method the {@link HttpMethod} to use or {@code null} for any
-	 * {@link HttpMethod}.
-	 * @param regexPatterns the regular expressions to create
-	 * {@link org.springframework.security.web.util.matcher.RegexRequestMatcher} from
-	 * @return the object that is chained after creating the {@link RequestMatcher}
-	 */
-	public C regexMatchers(HttpMethod method, String... regexPatterns) {
-		Assert.state(!this.anyRequestConfigured, "Can't configure regexMatchers after anyRequest");
-		return chainRequestMatchers(RequestMatchers.regexMatchers(method, regexPatterns));
-	}
-
-	/**
-	 * Create a {@link List} of
-	 * {@link org.springframework.security.web.util.matcher.RegexRequestMatcher} instances
-	 * that do not specify an {@link HttpMethod}.
-	 * @param regexPatterns the regular expressions to create
-	 * {@link org.springframework.security.web.util.matcher.RegexRequestMatcher} from
-	 * @return the object that is chained after creating the {@link RequestMatcher}
-	 */
-	public C regexMatchers(String... regexPatterns) {
-		Assert.state(!this.anyRequestConfigured, "Can't configure regexMatchers after anyRequest");
-		return chainRequestMatchers(RequestMatchers.regexMatchers(regexPatterns));
 	}
 
 	/**
@@ -248,6 +156,81 @@ public abstract class AbstractRequestMatcherRegistry<C> {
 	public C requestMatchers(RequestMatcher... requestMatchers) {
 		Assert.state(!this.anyRequestConfigured, "Can't configure requestMatchers after anyRequest");
 		return chainRequestMatchers(Arrays.asList(requestMatchers));
+	}
+
+	/**
+	 * <p>
+	 * If the {@link HandlerMappingIntrospector} is available in the classpath, maps to an
+	 * {@link MvcRequestMatcher} that also specifies a specific {@link HttpMethod} to
+	 * match on. This matcher will use the same rules that Spring MVC uses for matching.
+	 * For example, often times a mapping of the path "/path" will match on "/path",
+	 * "/path/", "/path.html", etc. If the {@link HandlerMappingIntrospector} is not
+	 * available, maps to an {@link AntPathRequestMatcher}.
+	 * </p>
+	 * <p>
+	 * If a specific {@link RequestMatcher} must be specified, use
+	 * {@link #requestMatchers(RequestMatcher...)} instead
+	 * </p>
+	 * @param method the {@link HttpMethod} to use or {@code null} for any
+	 * {@link HttpMethod}.
+	 * @param patterns the patterns to match on. The rules for matching are defined by
+	 * Spring MVC if {@link MvcRequestMatcher} is used
+	 * @return the object that is chained after creating the {@link RequestMatcher}.
+	 * @since 5.8
+	 */
+	public C requestMatchers(HttpMethod method, String... patterns) {
+		List<RequestMatcher> matchers = new ArrayList<>();
+		if (mvcPresent) {
+			matchers.addAll(createMvcMatchers(method, patterns));
+		}
+		else {
+			matchers.addAll(RequestMatchers.antMatchers(method, patterns));
+		}
+		return requestMatchers(matchers.toArray(new RequestMatcher[0]));
+	}
+
+	/**
+	 * <p>
+	 * If the {@link HandlerMappingIntrospector} is available in the classpath, maps to an
+	 * {@link MvcRequestMatcher} that does not care which {@link HttpMethod} is used. This
+	 * matcher will use the same rules that Spring MVC uses for matching. For example,
+	 * often times a mapping of the path "/path" will match on "/path", "/path/",
+	 * "/path.html", etc. If the {@link HandlerMappingIntrospector} is not available, maps
+	 * to an {@link AntPathRequestMatcher}.
+	 * </p>
+	 * <p>
+	 * If a specific {@link RequestMatcher} must be specified, use
+	 * {@link #requestMatchers(RequestMatcher...)} instead
+	 * </p>
+	 * @param patterns the patterns to match on. The rules for matching are defined by
+	 * Spring MVC if {@link MvcRequestMatcher} is used
+	 * @return the object that is chained after creating the {@link RequestMatcher}.
+	 * @since 5.8
+	 */
+	public C requestMatchers(String... patterns) {
+		return requestMatchers(null, patterns);
+	}
+
+	/**
+	 * <p>
+	 * If the {@link HandlerMappingIntrospector} is available in the classpath, maps to an
+	 * {@link MvcRequestMatcher} that matches on a specific {@link HttpMethod}. This
+	 * matcher will use the same rules that Spring MVC uses for matching. For example,
+	 * often times a mapping of the path "/path" will match on "/path", "/path/",
+	 * "/path.html", etc. If the {@link HandlerMappingIntrospector} is not available, maps
+	 * to an {@link AntPathRequestMatcher}.
+	 * </p>
+	 * <p>
+	 * If a specific {@link RequestMatcher} must be specified, use
+	 * {@link #requestMatchers(RequestMatcher...)} instead
+	 * </p>
+	 * @param method the {@link HttpMethod} to use or {@code null} for any
+	 * {@link HttpMethod}.
+	 * @return the object that is chained after creating the {@link RequestMatcher}.
+	 * @since 5.8
+	 */
+	public C requestMatchers(HttpMethod method) {
+		return requestMatchers(method, "/**");
 	}
 
 	/**

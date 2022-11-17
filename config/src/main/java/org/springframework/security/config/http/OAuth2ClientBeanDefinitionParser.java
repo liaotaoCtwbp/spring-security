@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,11 +44,17 @@ final class OAuth2ClientBeanDefinitionParser implements BeanDefinitionParser {
 
 	private static final String ATT_AUTHORIZATION_REQUEST_RESOLVER_REF = "authorization-request-resolver-ref";
 
+	private static final String ATT_AUTHORIZATION_REDIRECT_STRATEGY_REF = "authorization-redirect-strategy-ref";
+
 	private static final String ATT_ACCESS_TOKEN_RESPONSE_CLIENT_REF = "access-token-response-client-ref";
 
 	private final BeanReference requestCache;
 
 	private final BeanReference authenticationManager;
+
+	private final BeanReference authenticationFilterSecurityContextRepositoryRef;
+
+	private final BeanMetadataElement authenticationFilterSecurityContextHolderStrategy;
 
 	private BeanDefinition defaultAuthorizedClientRepository;
 
@@ -58,9 +64,13 @@ final class OAuth2ClientBeanDefinitionParser implements BeanDefinitionParser {
 
 	private BeanDefinition authorizationCodeAuthenticationProvider;
 
-	OAuth2ClientBeanDefinitionParser(BeanReference requestCache, BeanReference authenticationManager) {
+	OAuth2ClientBeanDefinitionParser(BeanReference requestCache, BeanReference authenticationManager,
+			BeanReference authenticationFilterSecurityContextRepositoryRef,
+			BeanMetadataElement authenticationFilterSecurityContextHolderStrategy) {
 		this.requestCache = requestCache;
 		this.authenticationManager = authenticationManager;
+		this.authenticationFilterSecurityContextRepositoryRef = authenticationFilterSecurityContextRepositoryRef;
+		this.authenticationFilterSecurityContextHolderStrategy = authenticationFilterSecurityContextHolderStrategy;
 	}
 
 	@Override
@@ -79,6 +89,7 @@ final class OAuth2ClientBeanDefinitionParser implements BeanDefinitionParser {
 		}
 		BeanMetadataElement authorizationRequestRepository = getAuthorizationRequestRepository(
 				authorizationCodeGrantElt);
+		BeanMetadataElement authorizationRedirectStrategy = getAuthorizationRedirectStrategy(authorizationCodeGrantElt);
 		BeanDefinitionBuilder authorizationRequestRedirectFilterBuilder = BeanDefinitionBuilder
 				.rootBeanDefinition(OAuth2AuthorizationRequestRedirectFilter.class);
 		String authorizationRequestResolverRef = (authorizationCodeGrantElt != null)
@@ -91,12 +102,14 @@ final class OAuth2ClientBeanDefinitionParser implements BeanDefinitionParser {
 		}
 		this.authorizationRequestRedirectFilter = authorizationRequestRedirectFilterBuilder
 				.addPropertyValue("authorizationRequestRepository", authorizationRequestRepository)
+				.addPropertyValue("authorizationRedirectStrategy", authorizationRedirectStrategy)
 				.addPropertyValue("requestCache", this.requestCache).getBeanDefinition();
-		this.authorizationCodeGrantFilter = BeanDefinitionBuilder
+		BeanDefinitionBuilder authorizationCodeGrantFilterBldr = BeanDefinitionBuilder
 				.rootBeanDefinition(OAuth2AuthorizationCodeGrantFilter.class)
 				.addConstructorArgValue(clientRegistrationRepository).addConstructorArgValue(authorizedClientRepository)
 				.addConstructorArgValue(this.authenticationManager)
-				.addPropertyValue("authorizationRequestRepository", authorizationRequestRepository).getBeanDefinition();
+				.addPropertyValue("authorizationRequestRepository", authorizationRequestRepository);
+		this.authorizationCodeGrantFilter = authorizationCodeGrantFilterBldr.getBeanDefinition();
 
 		BeanMetadataElement accessTokenResponseClient = getAccessTokenResponseClient(authorizationCodeGrantElt);
 		this.authorizationCodeAuthenticationProvider = BeanDefinitionBuilder
@@ -114,6 +127,16 @@ final class OAuth2ClientBeanDefinitionParser implements BeanDefinitionParser {
 		}
 		return BeanDefinitionBuilder.rootBeanDefinition(
 				"org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository")
+				.getBeanDefinition();
+	}
+
+	private BeanMetadataElement getAuthorizationRedirectStrategy(Element element) {
+		String authorizationRedirectStrategyRef = (element != null)
+				? element.getAttribute(ATT_AUTHORIZATION_REDIRECT_STRATEGY_REF) : null;
+		if (StringUtils.hasText(authorizationRedirectStrategyRef)) {
+			return new RuntimeBeanReference(authorizationRedirectStrategyRef);
+		}
+		return BeanDefinitionBuilder.rootBeanDefinition("org.springframework.security.web.DefaultRedirectStrategy")
 				.getBeanDefinition();
 	}
 

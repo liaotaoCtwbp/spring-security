@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,25 +20,28 @@ import java.io.IOException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.web.PortMapperImpl;
 import org.springframework.security.web.RedirectStrategy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.channel.ChannelDecisionManagerImpl;
 import org.springframework.security.web.access.channel.ChannelProcessingFilter;
 import org.springframework.security.web.access.channel.InsecureChannelProcessor;
 import org.springframework.security.web.access.channel.SecureChannelProcessor;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.spy;
@@ -107,17 +110,37 @@ public class ChannelSecurityConfigurerTests {
 		this.mvc.perform(get("/")).andExpect(redirectedUrl("https://localhost/test"));
 	}
 
+	// gh-10956
+	@Test
+	public void requestWhenRequiresChannelWithMultiMvcMatchersThenRedirectsToHttps() throws Exception {
+		this.spring.register(RequiresChannelMultiMvcMatchersConfig.class).autowire();
+		this.mvc.perform(get("/test-1")).andExpect(redirectedUrl("https://localhost/test-1"));
+		this.mvc.perform(get("/test-2")).andExpect(redirectedUrl("https://localhost/test-2"));
+		this.mvc.perform(get("/test-3")).andExpect(redirectedUrl("https://localhost/test-3"));
+	}
+
+	// gh-10956
+	@Test
+	public void requestWhenRequiresChannelWithMultiMvcMatchersInLambdaThenRedirectsToHttps() throws Exception {
+		this.spring.register(RequiresChannelMultiMvcMatchersInLambdaConfig.class).autowire();
+		this.mvc.perform(get("/test-1")).andExpect(redirectedUrl("https://localhost/test-1"));
+		this.mvc.perform(get("/test-2")).andExpect(redirectedUrl("https://localhost/test-2"));
+		this.mvc.perform(get("/test-3")).andExpect(redirectedUrl("https://localhost/test-3"));
+	}
+
+	@Configuration
 	@EnableWebSecurity
-	static class ObjectPostProcessorConfig extends WebSecurityConfigurerAdapter {
+	static class ObjectPostProcessorConfig {
 
 		static ObjectPostProcessor<Object> objectPostProcessor;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.requiresChannel()
 					.anyRequest().requiresSecure();
+			return http.build();
 			// @formatter:on
 		}
 
@@ -137,43 +160,48 @@ public class ChannelSecurityConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DuplicateInvocationsDoesNotOverrideConfig extends WebSecurityConfigurerAdapter {
+	static class DuplicateInvocationsDoesNotOverrideConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.requiresChannel()
 					.anyRequest().requiresSecure()
 					.and()
 				.requiresChannel();
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RequiresChannelInLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class RequiresChannelInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.requiresChannel((requiresChannel) ->
 					requiresChannel
 						.anyRequest().requiresSecure()
 			);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RequiresChannelWithTestUrlRedirectStrategy extends WebSecurityConfigurerAdapter {
+	static class RequiresChannelWithTestUrlRedirectStrategy {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.portMapper()
@@ -183,6 +211,7 @@ public class ChannelSecurityConfigurerTests {
 					.redirectStrategy(new TestUrlRedirectStrategy())
 					.anyRequest()
 					.requiresSecure();
+			return http.build();
 			// @formatter:on
 		}
 
@@ -196,6 +225,63 @@ public class ChannelSecurityConfigurerTests {
 			String redirectUrl = url + "test";
 			redirectUrl = response.encodeRedirectURL(redirectUrl);
 			response.sendRedirect(redirectUrl);
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	@EnableWebMvc
+	static class RequiresChannelMultiMvcMatchersConfig {
+
+		@Bean
+		@Order(Ordered.HIGHEST_PRECEDENCE)
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			// @formatter:off
+			http
+				.portMapper()
+					.portMapper(new PortMapperImpl())
+					.and()
+				.requiresChannel()
+					.requestMatchers("/test-1")
+						.requiresSecure()
+					.requestMatchers("/test-2")
+						.requiresSecure()
+					.requestMatchers("/test-3")
+						.requiresSecure()
+					.anyRequest()
+						.requiresInsecure();
+			// @formatter:on
+			return http.build();
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	@EnableWebMvc
+	static class RequiresChannelMultiMvcMatchersInLambdaConfig {
+
+		@Bean
+		@Order(Ordered.HIGHEST_PRECEDENCE)
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			// @formatter:off
+			http
+				.portMapper((port) -> port
+					.portMapper(new PortMapperImpl())
+				)
+				.requiresChannel((channel) -> channel
+					.requestMatchers("/test-1")
+						.requiresSecure()
+					.requestMatchers("/test-2")
+						.requiresSecure()
+					.requestMatchers("/test-3")
+						.requiresSecure()
+					.anyRequest()
+						.requiresInsecure()
+				);
+			// @formatter:on
+			return http.build();
 		}
 
 	}

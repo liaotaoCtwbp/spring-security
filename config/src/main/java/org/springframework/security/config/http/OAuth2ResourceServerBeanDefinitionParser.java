@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
-
 import org.w3c.dom.Element;
 
 import org.springframework.beans.BeanMetadataElement;
@@ -43,10 +42,10 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.OpaqueTokenAuthenticationProvider;
 import org.springframework.security.oauth2.server.resource.introspection.NimbusOpaqueTokenIntrospector;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
@@ -86,14 +85,18 @@ final class OAuth2ResourceServerBeanDefinitionParser implements BeanDefinitionPa
 
 	private final BeanDefinition accessDeniedHandler = new RootBeanDefinition(BearerTokenAccessDeniedHandler.class);
 
+	private final BeanMetadataElement authenticationFilterSecurityContextHolderStrategy;
+
 	OAuth2ResourceServerBeanDefinitionParser(BeanReference authenticationManager,
 			List<BeanReference> authenticationProviders, Map<BeanDefinition, BeanMetadataElement> entryPoints,
-			Map<BeanDefinition, BeanMetadataElement> deniedHandlers, List<BeanDefinition> ignoreCsrfRequestMatchers) {
+			Map<BeanDefinition, BeanMetadataElement> deniedHandlers, List<BeanDefinition> ignoreCsrfRequestMatchers,
+			BeanMetadataElement authenticationFilterSecurityContextHolderStrategy) {
 		this.authenticationManager = authenticationManager;
 		this.authenticationProviders = authenticationProviders;
 		this.entryPoints = entryPoints;
 		this.deniedHandlers = deniedHandlers;
 		this.ignoreCsrfRequestMatchers = ignoreCsrfRequestMatchers;
+		this.authenticationFilterSecurityContextHolderStrategy = authenticationFilterSecurityContextHolderStrategy;
 	}
 
 	/**
@@ -135,6 +138,8 @@ final class OAuth2ResourceServerBeanDefinitionParser implements BeanDefinitionPa
 		filterBuilder.addConstructorArgValue(authenticationManagerResolver);
 		filterBuilder.addPropertyValue(BEARER_TOKEN_RESOLVER, bearerTokenResolver);
 		filterBuilder.addPropertyValue(AUTHENTICATION_ENTRY_POINT, authenticationEntryPoint);
+		filterBuilder.addPropertyValue("securityContextHolderStrategy",
+				this.authenticationFilterSecurityContextHolderStrategy);
 		return filterBuilder.getBeanDefinition();
 	}
 
@@ -245,6 +250,10 @@ final class OAuth2ResourceServerBeanDefinitionParser implements BeanDefinitionPa
 
 		static final String CLIENT_SECRET = "client-secret";
 
+		static final String AUTHENTICATION_CONVERTER_REF = "authentication-converter-ref";
+
+		static final String AUTHENTICATION_CONVERTER = "authenticationConverter";
+
 		OpaqueTokenBeanDefinitionParser() {
 		}
 
@@ -252,9 +261,13 @@ final class OAuth2ResourceServerBeanDefinitionParser implements BeanDefinitionPa
 		public BeanDefinition parse(Element element, ParserContext pc) {
 			validateConfiguration(element, pc);
 			BeanMetadataElement introspector = getIntrospector(element);
+			String authenticationConverterRef = element.getAttribute(AUTHENTICATION_CONVERTER_REF);
 			BeanDefinitionBuilder opaqueTokenProviderBuilder = BeanDefinitionBuilder
 					.rootBeanDefinition(OpaqueTokenAuthenticationProvider.class);
 			opaqueTokenProviderBuilder.addConstructorArgValue(introspector);
+			if (StringUtils.hasText(authenticationConverterRef)) {
+				opaqueTokenProviderBuilder.addPropertyReference(AUTHENTICATION_CONVERTER, authenticationConverterRef);
+			}
 			return opaqueTokenProviderBuilder.getBeanDefinition();
 		}
 
